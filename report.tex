@@ -7,9 +7,9 @@
 \usepackage[hidelinks]{hyperref}
 \usepackage{graphicx}
 \usepackage{shorttoc}
+\usepackage{longtable}
 \usepackage{listings}
 \usepackage{caption}
-\lstset{language=caml}
 
 \title{Compiling a low-level language to Michelson}
 \author{Basile Pesin,\\
@@ -27,7 +27,7 @@
 
 \section{The Tezos blockchain}
 
-The Tezos ecosystem is centered around the Tezos blockchain. A blockchain is a decentralized database, usually focused on storing data about transactions made by it's users. Blockchains usually use a dedicated token, or cryptocurrency, to quantify these transactions. These currency, while they can't really (yet) be used to buy physical goods outside of the blockchain, can usually be exchanged for traditional government-established currencies, at varying rates. The currencies are often named the same as there related blockchains, and that's the case for Tezos (in the following report, I'll use ``Tezos'' for the blockchain, and ``XTZ'' for the related crypto-currency).\\
+The Tezos ecosystem is centered around the Tezos blockchain. A blockchain is a decentralized database, usually focused on storing data about transactions made by it's users. Blockchains usually use a dedicated token, or cryptocurrency, to quantify these transactions. These currency, while they can't really (yet) be used to buy physical goods outside of the blockchain, can usually be exchanged for traditional government-established currencies, at varying rates. The currencies are often named the same as there related blockchains, and that's the case for Tezos (in the following report, I'll use ``Tezos'' for the blockchain, and ``tez'' (or ``XTZ'') for the related crypto-currency).\\
 
 The Tezos blockchain, while currently an outsider compared to older, more successful blockchains (like Bitcoin or Ethereum), has several unique features that make it appealing. Namely, the chain gives token holders governance over the chain, being by using a proof-of-stake algorithm, or by allowing it's core protocol to be amended by votes of the community. More details on these features, which won't be discussed in this report, can be found in the Tezos White Paper~\cite{whitePaper}.
 
@@ -35,34 +35,88 @@ More to the point of this work, Tezos puts a strong emphasis on safety : the cha
 
 \section{The Michelson programming language}
 
-Tezos, as well as allowing regular ``humans'' to create accounts (referred to as tz1 accounts), also allows users to run programs on the blockchain. These programs are often called ``smart contracts'', since most of them are used to automate transactions between two parties. Once the contract has been uploaded (originated) on the blockchain, it can then be called by any other account (being a human user or another smart-contract) by sending a transaction, containing at least a small amount of XTZ to cover processing fees, as well as the parameters of the contract. The contract itself holds a balance and can use it's tokens to forge it's own transactions.
+Tezos, as well as allowing regular ``humans'' to create accounts (referred to as tz1 accounts), also allows users to run programs on the blockchain. These programs are often called ``smart contracts'', since most of them are used to automate transactions between two parties. Once the contract has been uploaded (originated) on the blockchain, it can then be called by any other account (being a human user or another smart-contract) by sending a transaction, containing at least a small amount of tez to cover processing fees, as well as the parameters of the contract. The contract itself holds a balance and can use it's tokens to forge it's own transactions.
 
-The programming language used to write smart contracts for Tezos is called Michelson~\cite{michelsonwhitedoc}. Michelson is a statically typed stack-based programming language, meaning that the programmer has to explicitly manipulate the typed stack of the interpreter, using low level instructions. The example of smart contract below is really simple, and the first we'll specify and verify (see \ref{voteVerif}).
+The programming language used to write smart contracts for Tezos is called Michelson~\cite{michelsonwhitedoc}. Michelson is a statically typed stack-based programming language, meaning that the programmer has to explicitly manipulate the typed stack of the interpreter, using low level instructions. Examples of Michelson contracts (and there specification) are available in section \ref{contractsSpec}
+
+As Michelson is a low level language, it can be very tedious to write: to manipulate the stack explicitly, the programmer needs to keep in mind the state of the stack at every point in the program (fortunately an emacs michelson-mode exists to display such information). The language was purposefully designed to be simple, which makes it easy to specify and proof specifications of programs, as we'll see below. However, it also makes writing smart-contracts in Michelson a bit tedious, and creates a barrier to entry for new programmers wanting to work in the Tezos ecosystem.
+
+Since the Michelson interpreter is already part of the Tezos protocol (and can only be changed by amendment and vote of the community), it's a good base to build upon : creating higher-level programming language that would compile to Michelson would facilitate the writing of smart-contracts. To accomplish this goal, a first step will be to establish an intermediate programming language, Albert, abstracting away some of the low-level hurdles of Michelson (the stack manipulations in particular). To keep formal verification in mind, the Albert language semantics will be specified, and the compiler proved correct.
+
+\chapter{The Mi-Cho-Coq framework}
+
+The Mi-Cho-Coq project consists in a formalisation of Michelson's semantics, written in Coq. Coupled with a weakest-precondition calculation, it allows it's users to specify properties of Michelson programs, and to prove them using the Coq proof assistant. We'll see below a few proofs of relatively simple contracts.
+
+\section{Proving the specification of smart-contracts}
+
+\subsection{Weather insurance}
+\label{contractsSpec}
+
+The first contract we'll prove using Mi-Cho-Coq is the weather insurance contract. It's principle is simple : the contract is originated containing, in it's storage the addresses of two other accounts, a treshold of rain, and the public key of a third party oracle. The contract is also originated with a balance. At any point, the oracle can send an integer representing the actual level of rain, as well as it's signature. The contract then verifies that the signature is correct, and if it is, compares the level of rain with it's treshold : it then sends it's whole balance to one of the addresses saved in it's storage, depending on the level of rain relative to it's treshold.
 
 \begin{lstlisting}
-storage (map string int);
-parameter string;
+parameter (pair (signature %received_sig) (nat :rain %rain_level));
+storage (pair (pair (contract unit %under_addr)
+                    (contract unit %over_addr))
+              (pair (nat %rain_tresh) (key %weather_service_key)));
+code { DUP; DUP;
+       CAR; MAP_CDR{PACK ; BLAKE2B};
+       SWAP; CDDDR;
+       DIP {UNPAIR}; CHECK_SIGNATURE ; # Check if the data has been correctly signed
+       ASSERT; # If signature is not correct, end the execution
+       DUP; DUP; DUP; DIIIP{CDR}; # Place storage type on bottom of stack
+       DIIP{CDAR};                # Place contracts below numbers
+       DIP{CADR};   # Get actual rain
+       CDDAR;         # Get rain threshold
+       CMPLT; IF {CAR} {CDR};     # Select contract to receive tokens
+       BALANCE; UNIT; TRANSFER_TOKENS; # Setup and execute transfer
+       NIL operation; SWAP; CONS;
+       PAIR };
+\end{lstlisting}
+Given the description above, we can easily give a specification of the contract. In the followings specifications, I'll note as ``preconditions'' the conditions that must be verified for the contract not to call \lstinline{FAIL} or a related macro). The ``postconditions'' fully describe the new state of the storage at the end of the execution, as well as the potential operations generated.
+
+{\small
+\begin{longtable}{rl}
+  \textbf{Preconditions}: & \texttt{SignatureCorrect}(weather\_service\_key, received\_sig)\\
+  \textbf{Postconditions}: & new\_storage = storage\\
+  & rain\_tresh $<$ rain\_level $\Rightarrow$ returned\_operations = [transfer\_tokens balance over\_addr]\\
+  & rain\_tresh $\ge$ rain\_level $\Rightarrow$ returned\_operations = [transfer\_tokens balance under\_addr]\\
+\end{longtable}}
+
+Although this is a pretty simple specification that was pretty simple to prove, one point stand out : we only specify the production of the operations at the end of the contract, and not there effect (in this case, that the balance of the contract would be drained after any successful execution). This is because Mi-Cho-Coq only specifies the execution of the contract, and not the interactions exteriors to a single execution.
+
+\subsection{Vote}
+
+Another specified smart-contract is the Vote contract. As it's name implies, it allows users to vote for a candidate among a list set at origination. The contracts retains the number of votes towards each candidate. Any user can vote any number of time, but must send 5 tez (or $5000000\mu tez$) with each vote, otherwise the transaction is refused.
+
+\begin{lstlisting}
+storage (map string int %candidates);
+parameter string %chosen;
 code { AMOUNT; PUSH mutez 5000000; COMPARE; GT;
        IF { FAIL } {};
        DUP; DIP { CDR; DUP }; CAR; DUP;
        DIP {
-             GET ; ASSERT_SOME;
+             GET; ASSERT_SOME;
              PUSH int 1; ADD; SOME
            };
        UPDATE; NIL operation; PAIR
      }
 \end{lstlisting}
 
-\chapter{Manipulating the Mi-Cho-Coq framework}
+We can then specify this smart-contract as follows (\texttt{amount} refers to the quantity of $\mu tez$ sent by the caller for the transaction):
+{\small
+\begin{longtable}{rl}
+  \textbf{Preconditions}: & \texttt{amount} $>$ 5000000\\
+  & chosen $\in$ \texttt{Keys}(storage)\\
+  \textbf{Postconditions}: & returned\_operations = [ ]\\
+  & $\forall$ c, c $\in$ \texttt{Keys}(storage) $\iff$ c $\in$ \texttt{Keys}(new\_storage)\\
+  & new\_storage[chosen] = storage[chosen] + 1\\
+  & $\forall$ c $\in$ \texttt{Keys}(storage), c $\neq$ chosen $\Rightarrow$ new\_storage[c] = storage[c]
+\end{longtable}}
 
-\section{Proving the specification of smart-contracts}
+Despite not looking much more complicated than the weather insurance smart contract, the specification of the vote smart-contract was slightly harder to prove. Indeed, in order to prove most of the postconditions, we had to prove a few lemmas on the map datastructure, and the relations between the functions ($mem$, $get$ and $update$) used to manipulate it. These lemmas were integrated in the library of Mi-Cho-Coq, and will most likely be useful to prove other contracts in the future.
 
-\subsection{Voting smart contract}
-\label{voteVerif}
-
-\subsection{Weather insurance}
-
-\subsection{List manipulations}
+%\subsection{List manipulations} TODO ?
 
 \section{Tooling Michocott}
 
