@@ -1,0 +1,80 @@
+\documentclass{report}
+\usepackage[a4paper, margin=1in]{geometry}
+
+\usepackage[english]{babel}
+\usepackage{listings}
+\usepackage[utf8]{inputenc}
+\usepackage[hidelinks]{hyperref}
+\usepackage{graphicx}
+\usepackage{shorttoc}
+\usepackage{listings}
+\usepackage{caption}
+\lstset{language=caml}
+
+\title{Compiling a low-level language to Michelson}
+\author{Basile Pesin,\\
+  sous la direction de Bruno Bernardo,\\
+  Nomadic Labs}
+
+\begin{document}
+
+\maketitle
+
+\shorttoc{Summary}{0}
+
+\chapter*{Context}
+\addcontentsline{toc}{chapter}{Context}
+
+\section{The Tezos blockchain}
+
+The Tezos ecosystem is centered around the Tezos blockchain. A blockchain is a decentralized database, usually focused on storing data about transactions made by it's users. Blockchains usually use a dedicated token, or cryptocurrency, to quantify these transactions. These currency, while they can't really (yet) be used to buy physical goods outside of the blockchain, can usually be exchanged for traditional government-established currencies, at varying rates. The currencies are often named the same as there related blockchains, and that's the case for Tezos (in the following report, I'll use ``Tezos'' for the blockchain, and ``XTZ'' for the related crypto-currency).\\
+
+The Tezos blockchain, while currently an outsider compared to older, more successful blockchains (like Bitcoin or Ethereum), has several unique features that make it appealing. Namely, the chain gives token holders governance over the chain, being by using a proof-of-stake algorithm, or by allowing it's core protocol to be amended by votes of the community. More details on these features, which won't be discussed in this report, can be found in the Tezos White Paper~\cite{whitePaper}.
+
+More to the point of this work, Tezos puts a strong emphasis on safety : the chain is implemented in OCaml, a statically typed programming language, which prevents some runtime errors. As we will see below, formal verification is also a focus on the work around the chain, and will be the focus of this report.
+
+\section{The Michelson programming language}
+
+Tezos, as well as allowing regular ``humans'' to create accounts (referred to as tz1 accounts), also allows users to run programs on the blockchain. These programs are often called ``smart contracts'', since most of them are used to automate transactions between two parties. Once the contract has been uploaded (originated) on the blockchain, it can then be called by any other account (being a human user or another smart-contract) by sending a transaction, containing at least a small amount of XTZ to cover processing fees, as well as the parameters of the contract. The contract itself holds a balance and can use it's tokens to forge it's own transactions.
+
+The programming language used to write smart contracts for Tezos is called Michelson~\cite{michelsonwhitedoc}. Michelson is a statically typed stack-based programming language, meaning that the programmer has to explicitly manipulate the typed stack of the interpreter, using low level instructions. The example of smart contract below is really simple, and the first we'll specify and verify (see \ref{voteVerif}).
+
+\begin{lstlisting}
+storage (map string int);
+parameter string;
+code { AMOUNT; PUSH mutez 5000000; COMPARE; GT;
+       IF { FAIL } {};
+       DUP; DIP { CDR; DUP }; CAR; DUP;
+       DIP {
+             GET ; ASSERT_SOME;
+             PUSH int 1; ADD; SOME
+           };
+       UPDATE; NIL operation; PAIR
+     }
+\end{lstlisting}
+
+\chapter{Manipulating the Mi-Cho-Coq framework}
+
+\section{Proving the specification of smart-contracts}
+
+\subsection{Voting smart contract}
+\label{voteVerif}
+
+\subsection{Weather insurance}
+
+\subsection{List manipulations}
+
+\section{Tooling Michocott}
+
+\chapter{Albert Compiler}
+
+\section{Big-Step semantics}
+
+\bibliography{biblio}{}
+\bibliographystyle{unsrt}
+\addcontentsline{toc}{chapter}{Bibliography}
+
+\tableofcontents
+\addcontentsline{toc}{chapter}{Table of Contents}
+
+\end{document}
