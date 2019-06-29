@@ -8,12 +8,12 @@
 \usepackage{graphicx}
 \usepackage{shorttoc}
 \usepackage{longtable}
-\usepackage{listings}
+\usepackage{listings,xcolor}
 \usepackage{caption}
 
 \title{Compiling a low-level language to Michelson}
 \author{Basile Pesin,\\
-  sous la direction de Bruno Bernardo,\\
+  under the supervision of Bruno Bernardo,\\
   Nomadic Labs}
 
 \begin{document}
@@ -120,9 +120,53 @@ Despite not looking much more complicated than the weather insurance smart contr
 
 \section{Tooling Michocott}
 
+Michocott is an implementation of Mi-Cho-Coq, using the Ott~\cite{ottLang} programming language. From a set of grammar definitions and rules, Ott can generate typing and semantic rules for Coq (and other proof assistants), a menhir parser, as well as latex documentation.
+
+\subsection{Documentation generation}
+
+In order to adapt Ott to Michelson's needs, and especially the format of it's online documentation (\url{http://tezos.gitlab.io/mainnet/whitedoc/michelson.html}), which uses the ReStructuredText (reST) format, I added a reST output mode to Ott. Given the architecture of the Ott compiler, which separates frontend from backend pretty well, it was fairly easy to add a new RST backend.\\
+To make the output practical for integrating pieces of the documentation with human-written text, I also added a mode allowing to generate one \textit{.rst} file per typing/semantic rule. The fragments can then be integrated into a single documentation page using the reST \texttt{.. include::} directive.\\
+
+Another goal of automated document generation is to check that the typing and semantic rules specified in Michocott (and Mi-Cho-Coq) are indeed the same as the ones actually implemented in the Michelson interpreter running in the chain. In order to easily compare the two, we need a structured output which can be automatically generated from both Michocott and the interpreter. Luckily for us, on the interpreter side, we already have the start of a solution : Alexandre Doussot developped, for his own tool (try-michelson \url{https://gitlab.com/nomadic-labs/try-michelson}) a tool capable to parse the Michelson documentation (which, while not being automatically generated from the interpreter code, is kept updated and in check by the Tezos developers).
+
+In order to complete the chain between the interpreter and Michocott, I added a JSON output to Ott. An example of the JSON output is as follows :
+\lstset{
+    string=[s]{"}{"},
+    stringstyle=\color{blue},
+    comment=[l]{:},
+    commentstyle=\color{black},
+}
+\begin{lstlisting}
+    {"op":"CDR",
+      "ty":[{
+         "name":"t_fun1_CDR",
+         "premises":[],
+         "conclusion":"CDR :: pair ty1 ty2 -> ty2"}],
+      "semantics":[{
+          "name":"bs_CDR",
+          "premises":[],
+          "conclusion":"CDR / ( Pair d d' ) : S => d' : S"}]
+    },
+\end{lstlisting}
+The implementation of the output is unfortunately, highly specific to Michelson's need (in particular, it sorts and organize the rules according to the instruction they relate too), so it's very unlikely it will be merged into Ott proper, and will probably remain in a Nomadic-specific fork.
+
+\subsection{Parser and lexer improvements}
+
+In addition to it's specification and documentation capabilities, Ott can also, using the grammar rules defined for a language, generate both an Ocamllex lexer and a Menhir parser (only for OCaml, but a port to use the coq version of Menhir should be doable with minimal modifications). These functionalities however are still, in the main branch of Ott, a bit lackluster, and I proposed the following changes to fix some of the issues I encountered while using the lexer generation (these changes can be seen in this GitHub PR : \url{https://github.com/ott-lang/ott/pull/52})
+
+\begin{itemize}
+\item Order of the tokens : In order for the tokens to be correctly lexed, a token prefixing another must be placed after the longer token in the \textit{.mll} file : this is because OCamllex always select the first matching token it encounters, and therefore would always select the prefix if it was first in the list. Fortunately, it's sufficient to sort the tokens by decreasing length to solve this problem. More difficult is the problem of regular expressions that can be included in one another. I decided to simply place the metavars (which are most likely to use regex) at the end of the list; a better method could surely be implemented to construct topological sort of regex, but this would really complicate the program and the running time of Ott, for really small benefits.
+\item Type conversion : Regarding the metavars, some of them are often used to define a token containing a value of a type different than string (typically, to parse integer or floats). The lexer generation didn't account for this, so I added a feature to automatically add a \texttt{string\_of\_XXX} conversion to the token lexing. The features get the relevant type from the metavar declaration in the Ott source file. As of this PR, I've only added the conversions \texttt{string\_of\_int}, \texttt{string\_of\_bool} and \texttt{string\_of\_float}, but it could be interesting allowing users to define and use their own conversion arbitrary conversion function (however, that would require some heavier modification of the code, and most likely be a really niche feature)
+\item Location : Finally, I completed the calculations of lexer locations, which didn't update when uncountering a new line (``\textbackslash n'' character), because the call to \texttt{Lexing.new\_line lexbuf} was missing. This is a tiny change, but it allows for parsing error message to be correct and helpful.
+\end{itemize}
+
 \chapter{Albert Compiler}
 
+\section{Type system}
+
 \section{Big-Step semantics}
+
+\section{Compiler}
 
 \bibliography{biblio}{}
 \bibliographystyle{unsrt}
