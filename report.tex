@@ -424,7 +424,7 @@ $$
     { x_1 :: x_2 / \{ x_1 = val_1 ; x_2 = lval_2 \} -> val_1 :: lval_2 }
 $$
 
-More interestingly, programmers can also pattern-match on an empty or non-empty list (to mimic the !IF\_CONS! instruction of Michelson). As in the previously-described variant pattern-matching, list pattern-matching exists both as a right-hand side and an instruction (we show below the instruction version of the semantic rules, for a change).
+More interestingly, programmers can also pattern-match on an empty or non-empty list (to mimic the !IF_CONS! instruction of Michelson). As in the previously-described variant pattern-matching, list pattern-matching exists both as a right-hand side and an instruction (we show below the instruction version of the semantic rules, for a change).
 
 $$
 \inferrule* [left=(ins\_list\_match\_nil)]
@@ -438,19 +438,100 @@ $$
     { E \vdash_{ins} match\:var\:with [] \rightarrow I_1 | var_1 :: var_2 -> I_2\:end / rval' \rightarrow val }
 $$
 
-More specific to lists (and to maps, as we'll see) are the \lstinline{map} (as a right-hand-side) and \lstinline{for} (as an instruction) operations, which mirror the !ITER! instruction.
+More specific to lists (and to maps, as we'll see) are the \lstinline{map} (as a right-hand-side) and \lstinline{for} (as an instruction) operations, which mirror the !ITER! instruction. We'll show below the \listinline{map} semantic rules.
 
-TODO
+$$
+\inferrule* [left=(rhs\_list\_map\_nil)]
+    { }
+    { E \vdash_{rhs} map\:var\:in\:var'\:do\:rhs\:done / \{ var' = [] \} \rightarrow [] }
+$$
+
+$$
+\inferrule* [left=(rhs\_list\_map\_cons)]
+    { E \vdash_{rhs} rhs / \{ var = val \} \rightarrow val' \\ E \vdash_{rhs} map\:var\:in\:var'\:do\:rhs\:done / \{ var' = tl \} \rightarrow tl' }
+    { E \vdash_{rhs} map\:var\:in\:var'\:do\:rhs\:done / \{ var' = val :: tl \} \rightarrow val' :: tl' }
+$$
 
 \subsubsection{Maps}
 
-TODO
+Albert also implements associative maps, like Michelson does. These maps implement classic \texttt{get} and \texttt{update} operations, where \texttt{get} returns takes a key and returns an option, and update takes both a key and an option (to allow to remove a value from the map). The semantics of for the get operation are outlined below.
+
+$$
+\inferrule* [left=(get\_nil)]
+   { }
+   { E \vdash_{rhs} var[x] / \{ var = \{\} ; x = val \} \rightarrow None \{\} }
+$$
+
+$$
+\inferrule* [left=(get\_found)]
+   { }
+   { E \vdash_{rhs} var[x] / \{ var = \{ val \mapsto val' ; mval \}; x = val \} \rightarrow Some\:val' }
+$$
+
+$$
+\inferrule* [left=(get\_next)]
+   { val_1 \neq val_2 \\
+     E \vdash_{rhs} var[x] / \{ var = mval ; x = val_2 \} \rightarrow val'_2}
+   { E \vdash_{rhs} var[x] / \{ var = { val_1 |-> val_1' ; mval } ; x = val_2 \} \rightarrow val'_2 }
+ $$
+
+\noindent And the semantics for the update operation are the following.
+
+$$
+\inferrule* [left=(update\_nil\_none)]
+   { }
+   { E \vdash_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = \{\} ; x = v_1 ; y = None \{\} \} \rightarrow \{\} }
+$$
+
+$$
+\inferrule* [left=(update\_nil\_some)]
+   { }
+   { E \vdash_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = \{\} ; x = v_1 ; y = Some\:v_2 \} \rightarrow \{ v_1 \mapsto v_2 \} }
+$$
+
+$$
+\inferrule* [left=(update\_cons\_none)]
+   { }
+   { E \vdash_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = \{ v_1 \mapsto v_3 ; mval \} ; x = v_1 ; y = None \{\} \} \rightarrow mval }
+$$
+
+$$
+\inferrule* [left=(update\_cons\_some)]
+   { }
+   { E \vdash_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = \{ v_1 \mapsto v_3 ; mval \} ; x = v_1 ; y = Some\:v_2 \} \rightarrow \{ v_1 \mapsto v_2 ; mval \} }
+$$
+
+$$
+\inferrule* [left=(update\_next)]
+   { v_1 \neq v_1' \\ E \vdash_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = mval ; x = v_1 ; y = v_2 \} \rightarrow mval' }
+   { E \vdash_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = \{ v_1' \mapsto v_3 ; mval \} ; x = v_1 ; y = v_2 \} \rightarrow \{ v_1' \mapsto v_3 ; mval' \} }
+$$
+
+
+Moreover, like the list, maps can be iterated (and mapped) upon, in which case both key and values can be used in the loop body. Below we show the semantic rules for the \lstinline{for} loop instruction on a map.
+
+$$
+\inferrule* [left=(ins\_map\_for\_nil)]
+   { \{ var' = \{\} \} @ rval = rval' }
+   { E \vdash_{ins} for\:var \mapsto var'\:in\:var'\:do\:I_1\:done / rval' \rightarrow rval }
+$$
+
+$$
+\inferrule* [left=(ins\_map\_for\_cons)]
+    { \{ var = val ; var' = val' \} @ rval = rval' \\
+      E \vdash_{ins} I_1 / rval' \rightarrow rval1 \\
+      \{ var'' = mval \} @ rval1 = rval'' \\
+      E \vdash_{ins} for\:var \mapsto var'\:in\:var''\:do\:I_1\:done / rval'' \rightarrow rval2 }
+    { E \vdash_{ins} for\:var \mapsto var'\:in\:var''\:do\:I_1\:done / \{ var'' = \{ val \mapsto val' ; <mval> \} \} \rightarrow rval2 }
+$$
+
+\noindent Lastly, the language implements sets, which are simply maps where the value is equal to the key.
 
 \section{Compiler to Mi-Cho-Coq}
 
 With all these rules written down (plus the typing rules), we now have to write a compiler answering to this formal specification, that is a compiler that, from a well-typed Albert program, compiles to a well typed Michelson program, with the type and semantics of the Michelson program being equivalent to the those of the Michelson's program. In order to specify and prove these properties, we'll first have to define a relation between Albert's type and Michelson's type, as well as a relation between Albert's values and Michelson's values (as we'll see in \ref{alberteqmichelson}).
 
-In order to be able to use a formal specification of Michelson (which is already written in Coq), we'll compile to Mi-Cho-Coq's AST. More specifically, we'll target Mi-Cho-Coq's untyped syntax, which can then be turned back into the typed syntax using Mi-Cho-Coq's typer (if the untyped program is well-typed of course).
+In order to be able to use a formal specification of Michelson (which is already written in Coq), we'll compile to Mi-Cho-Coq's AST. More specifically, we'll target Mi-Cho-Coq's untyped syntax, which can then be turned back into the typed syntax using Mi-Cho-Coq's typer (as long as the untyped program respects Michelson's typing rules of course). This is simpler than compiler to the typed syntax, but means we'll also have to prove the compiled Michelson program is correctly typed separately.
 
 \subsection{Equivalence between Albert and Michelson}
 \label{alberteqmichelson}
