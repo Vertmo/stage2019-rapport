@@ -1,0 +1,35 @@
+\lstdefinelanguage{albert}{%
+   columns=fullflexible,%
+   basicstyle=\tt ,
+   % keywordstyle=\bfseries,
+   commentstyle=\slshape,%
+   keywordstyle={\color{red}\sffamily},%
+   keywords={%
+     \{,\},
+     type, def,
+     dup, drop,
+     car, cdr,
+     match, with, end,
+     assert_some, Some, None,
+     for, map,
+     failwith
+   },%
+   alsoletter={'},
+   keywordstyle={\color{purple}\sffamily},%
+   morekeywords=[2]{%
+     key, unit, signature, option, list, set, operation, address,%
+     contract, pair, or, lambda, big_map, map,%
+     int, nat, string, bytes, mutez, bool, key_hash, %
+     timestamp%
+   },%
+   keywordstyle=[2]{\color{blue}\ttfamily},%
+   classoffset=2,%
+   morekeywords=[3]{%
+     storage, parameter, code %
+   },%
+   keywordstyle=[3]{\bfseries},%
+   sensitive,%
+   comment=[l]\#,%
+   morestring=[d]",%"
+   literate={->}{{$\rightarrow$}}1%
+}[keywords,comments,strings]%

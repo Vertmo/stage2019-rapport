@@ -12,6 +12,7 @@
 \usepackage{caption}
 \usepackage{mathpartir}
 
+\input{albertlang}
 \input{michelsonlang}
 
 \title{Compiling a low-level language to Michelson}
@@ -178,7 +179,9 @@ $$
     { \Gamma \vdash bar = foo : \{ foo : ty \} @ rty \Rightarrow \{ bar : ty \} @ rty }
 $$
 
-Where \texttt{rty} is the type of the other values contained in the stack, and \texttt{@} denotes the join operation for record types. The semantics of this simple assign operation mirrors it's typing:
+    Where \texttt{rty} is the type of the other values contained in the stack, and \texttt{@} denotes the join operation for record types. It's important to note that the join operator is not a simple append, and is commutative. It's actually equivalent to the \texttt{merge} operation in MergeSort, with the fields of the record sorted by lexicographic order of the labels. This canonical form is also extended to record types, where fields must be sorted in lexicographic order for the type to be deemed ``well formed''.
+
+The semantics of this simple assign operation mirrors it's typing (the \texttt{@} join operation used here is similar to the one used for record types).
 
 $$
 \inferrule*
@@ -196,7 +199,8 @@ Moreover, Albert generalizes \texttt{pair} types with \texttt{record}, and \text
 
 Below is the classic vote smart-contract, rewritten in Albert. It's notable that although the code is clearly longer than the Michelson one, it's also more comprehensible from an imperative programming frame of mind.
 
-\begin{lstlisting}[language=caml].
+\lstset{language=albert}
+\begin{lstlisting}
 type storage_ty = { threshold : mutez; votes: map string nat }
 
 def vote :
@@ -228,7 +232,17 @@ Two difficulties still arise from writing an Albert contract, and create verbosi
 
 \section{Formal semantics}
 
-Most of the language is actually based on the \texttt{lhs} = \texttt{rhs} assignment instruction, which is necessary to ensure all calculated values are indeed named and stored. Therefore an Albert program resembles a series of assignments, with the left-hand side being either a simple variable, or a record destructuring. We'll note below the formal semantics of these two left-hand sides.
+I started my work on Albert by writing down the formal semantics of the language, mostly by following the typing rules. I'll give below the highlights of the rules.
+
+\subsection{Bases of the language}
+
+$$
+\inferrule* [left=(instr\_assign)]
+    { E \vdash rhs / val -> val' \\ E |- lhs / val' \rightarrow val'' }
+    { E \vdash lhs = rhs / val \rightarrow val'' }
+$$
+
+Most of the language is actually based on the \texttt{lhs} = \texttt{rhs} assignment instruction (as seen above), which is necessary to ensure all calculated values are indeed named and stored. An Albert program therefore resembles a series of assignments, with the left-hand side being either a simple variable, or a record destructuring. It's important two notes that, since an instruction always manipulates a record (representing Michelson's stack) the input value of \lstinline{rhs} and output value of \lstinline{rhs} are necessarily records, while the value passed from \lstinline{rhs} to \lstinline{lhs} can be anything. We'll note below the formal semantics of these two left-hand sides.
 
 $$
 \inferrule* [left=(lhs\_var)]
@@ -242,11 +256,209 @@ $$
     { E \vdash \{ l_1 = x_1 ; .. ; l_n = x_n \} / \{ l_1 = val_1 ; .. ; l_n = val_n \} \rightarrow \{ x_1 = val_1 ; .. ; x_n = val_n \} }
 $$
 
-Actual calculations are performed in the right-hand side of assignment instructions. They can be either simple arguments (which we'll see below), function applications, primitive calculations, or specific calculations on data structures.
+    Actual calculations are performed in the right-hand side of assignment instructions. Right-hand sides can first be a simple argument: either a constant value, a variable or a record constructed from variables; as arguments are called from \lstinline{rhs}, their input value is always a record (representing the stack).
+
+$$
+\inferrule* [left=(arg\_var)]
+    { }
+    { E \vdash_{arg} var / \{ var = val \} \rightarrow val }
+$$
+$$
+\inferrule* [left=(arg\_val)]
+    { }
+    { E \vdash_{arg} val / \{\} \rightarrow val }
+$$
+$$
+\inferrule* [left=(arg\_record)]
+    { }
+    { E \vdash_{arg} \{ l_1 = x_1 ; .. ; l_n = x_n \} / \{ x_1 = val_1 ; .. ; x_n = val_n \} \rightarrow \{ l_1 = val_1 ; .. ; l_n = val_n \} }
+$$
+
+$$
+\inferrule* [left=(rhs\_arg)]
+    { E \vdash_{arg} arg / val \rightarrow val' }
+    { E \vdash_{rhs} arg / val \rightarrow val' }
+$$
+
+Right-hand sides can also be a function application (to arguments). Functions can either be primitives (for instance, the \lstinline{dup} instruction is represented as a function) or user-defined. A user defined function is found in the environment ($E$), and is simply seen as an instruction (as in Michelson, all functions are global).
+
+$$
+\inferrule* [left=(f\_fvar)]
+    { fvar = instruction \in E \\ E \vdash_{ins} instruction / val \rightarrow val' }
+    { E \vdash_{f} f / val \rightarrow val' }
+$$
+$$
+\inferrule* [left=(f\_dup)]
+    { }
+    { E \vdash_{f} dup / val \rightarrow \{ car = val; cdr = val \} }
+$$
+
+$$
+\inferrule* [left=(rhs\_app)]
+    { E \vdash_{arg} arg / val \rightarrow val' \\ E |-_{funct} f / val' \rightarrow val'' }
+    { E \vdash_{rhs} f arg / val \rightarrow val'' }
+$$
+
+Right-hand sides can also act directly on record, either by projection (taking a specific fields of the record by name) or by updating them (which of course consumes other values on the stack).
+
+$$
+\inferrule* [left=(rhs\_projection)]
+    { \{ l = val \} @ rval = rval' }
+    { E \vdash_{rhs} var.l / rval' \rightarrow val }
+$$
+$$
+\inferrule* [left=(rhs\_update)]
+    { \{ l_1 = val'_1 ; .. ; l_n = val'_n \} @ rval = rval'
+    \\ \{ l_1 = val_1 ; .. ; l_n = val_n \} @ rval = rval''}
+    { E \vdash_{rhs} \{ var\:with\:l_1 = var_1 ; .. ; l_n = var_n \} / \{ var = rval' ; var_1 = val_1 ; .. ; var_n = val_n \} -> rval'' }
+$$
+
+Right-hand sides also include most of the arithmetic operations on numerical data. I give here both the $+$ rule, and the $/mod$ rule, interesting in that it returns a pair containing the quotient and the remainder of the euclidean division. The $-$ and $\times$ rules are similar to the $+$ ones.
+
+$$
+\inferrule* [left=(rhs\_projection)]
+    {  }
+    { E \vdash_{rhs} (x_1 + x_2) / \{ x_1 = nv_1 ; x_2 = nv_2 \} \rightarrow nv_1 + nv_2 }
+$$
+$$
+\inferrule* [left=(rhs\_update)]
+    { }
+    { E \vdash_{rhs} (x_1\:/mod\:x_2) / \{ x_1 = nv_1 ; x_2 = nv_2 \} \rightarrow \{ quotient = nv_1 / nv_2 ; remainder = nv_1 \% nv_2 \} }
+$$
+
+Apart from assignments, the instruction language is also completed with a few specific instructions : for instance, the \lstinline{drop} instruction, which behave similarly to the !DROP! instruction in Michelson. It's a bit less useful in Albert however, as useless variable existing in the main record is not an annoyance for the programmer, who can simply ignore it.
+
+$$
+\inferrule* [left=(rhs\_update)]
+    { }
+    { E \vdash_{ins} DROP var / \{ var = val \} \rightarrow \{ \} }
+$$
+
+The instructions are linked together as sequences of instructions. The sequence rule is the following:
+
+$$
+\inferrule* [left=(ins\_seq)]
+    { E \vdash_{ins} I_1 / val \rightarrow val' \\
+      E \vdash_{ins} I_2 / val' \rightarrow val'' }
+    { E \vdash_{ins} I_1 ; I_2 / val \rightarrow val'' }
+$$
+
+This seems pretty straightforward; however, we quickly see that the input and output values used by instructions (which are record values representing the stack) are incomplete: as the current rules are laid out, the only variables in the stack present in $val$ are the one actually consumed by $I_1$, and the ones present in val' are therefore either the one produced by $I_1$, or the one consumed by $I_2$, which are not necessarily the same. We therefore need to add a new rule, to allow for the passed stack fragments to be completed by unused variables. We call this rule \texttt{frame}, and specify it below.
+
+$$
+\inferrule* [left=(ins\_seq)]
+    { E \vdash_{ins} instruction / rval \rightarrow rval' \\
+      rval @ rval'' = rval_1 \\
+      rval' @ rval'' = rval_2 }
+    { E \vdash_{ins} instruction / rval_1 \rightarrow rval_2 }
+$$
+
+This rule is, of course, mirrored in the typing of the instruction.
+
+\subsection{Data structures}
+
+\subsubsection{Variants}
+
+As we've seen above, Albert's \texttt{variant} types generalize the \texttt{or}, \texttt{option} and \texttt{bool} types. Variants are therefore the dual of Records, with the caveat that it is not possible to construct an empty variant (by choice, as Michelson does not have an empty type it could correspond to). Variants offer two mains operations to the user : constructing a \texttt{variant} value using a constructor, and pattern-matching on a \texttt{variant} value.
+
+Constructor are determined by a label, and applied (as a function) on a single value. When constructing a \texttt{variant} value, the user must indicate the full type of the variant value (meaning, all the different constructors and their types). This choice was made in order to simplify the work of the type-checker of Albert (since Albert is an intermediate language designed to be compiled for, and not for programs to be manually written for, this should not be too much of an issue for future users). Below is the typing rule for \texttt{variant} value and constructor application, as well as the related semantic rule.
+
+$$
+\inferrule* [left=(val\_constr)]
+    { G \vdash_{val} val : ty \\ [ constructor : ty ] @ vty' = vty }
+    { G \vdash_{val} (constructor\:val : vty) : vty }
+$$
+
+$$
+\inferrule* [left=(f\_constr)]
+    { [ constructor : ty ] @ vty' = vty }
+    { G \vdash_{funct} constructor\:vty : ty \Rightarrow vty }
+$$
+
+$$
+\inferrule* [left=(f\_constr)]
+    { }
+    { E \vdash_{funct} constructor\:vty / val \rightarrow (constructor\:val : vty) }
+$$
+
+Like records, variants have a ``canonical form'', where constructors are ordered by lexicographic order. Therefore, the \texttt{@} join relation used above behaves exactly like the one on records.
+
+Pattern matching can be used on variants either as a right-hand side (in which case every branch will be a right-hand side) or as an instruction (and every branch will be an instruction). To simplify typing and compilation, the branches have to be ordered in this same canonical, lexicographic order. Again, this is a restriction for a human programmer, but pretty simple to overcome for a higher-level compiler. Below is the typing rule, as well as the semantic rules for the right-hand side version of the pattern matching (the instruction version is similar).
+
+$$
+\inferrule* [left=(rhs\_match)]
+    { \{var : [ cons_1 : ty_1 | \ldots | cons_k : ty_k ]\} @ rty = rty' \\
+      \{var_1 : ty_1\} @ rty = rty_1 \ldots \{var_k : ty_k\} @ rty = rty_k \\
+      G \vdash_{rhs} rhs_1 : rty_1 \Rightarrow ty \ldots G \vdash_{rhs} rhs_k : rty_k \Rightarrow ty }
+    { G \vdash_{rhs} match\:var\:with\:cons_1\:var_1 \rightarrow rhs_1 | \ldots | cons_k\:var_k \rightarrow rhs_k\:end : rty' \Rightarrow (constructor\:val : vty) }
+$$
+
+$$
+\inferrule* [left=(rhs\_match\_found)]
+    { E \vdash_{rhs} rhs / \{ var' = val' \} \rightarrow val }
+    { E \vdash_{rhs} match\:var\:with\:cons\:var' \rightarrow rhs | <branches\_rhs> end / \{ var = (cons\:val' : vty) \} \rightarrow val }
+$$
+
+$$
+\inferrule* [left=(rhs\_match\_next)]
+    { cons \neq cons' \\
+      E \vdash_{rhs} match\:var\:with\:branches_rhs\:end / \{ var = (cons\:val' : vty) \} \rightarrow val' }
+    { E \vdash_{rhs} match\:var\:with\:cons'\:var' \rightarrow rhs | <branches\_rhs> end / \{ var = (cons\:val' : vty) \} \rightarrow val }
+$$
+
+While these rules seem pretty verbose, they are quite simple to explain: every branch should have the same type (in an environment where the pattern's \texttt{var} has the type related to the constructor). Evaluation of a match simply consists in evaluating the correct right-hand side (by typing, all the branches must be specified, so the match always succeed). By typing, we also see that every-branch of the pattern-matching must consume the exact same variables from the stack. This is a severe restriction which could be difficult to deal with while programming in Albert, but is necessary in order for the compiled Michelson program to be correctly typed. The right-hand side match is particularly constrained, since the program can't even \texttt{drop} unnecessary variables in a branch.
+
+\subsubsection{Lists}
+
+As in Michelson, Albert implements linked lists. The language first gives the user a few operation to construct list, either in extension or by \texttt{cons} operations.
+
+$$
+\inferrule* [left=(rhs\_list)]
+    { }
+    { E \vdash_{rhs} [ var_1 ; .. ; var_n ] / \{ var_1 = val_1 ; .. ; var_n = val_n \} -> [ val_1 ; .. ; val_n ] }
+$$
+
+$$
+\inferrule* [left=(rhs\_cons)]
+    { }
+    { x_1 :: x_2 / \{ x_1 = val_1 ; x_2 = lval_2 \} -> val_1 :: lval_2 }
+$$
+
+More interestingly, programmers can also pattern-match on an empty or non-empty list (to mimic the !IF\_CONS! instruction of Michelson). As in the previously-described variant pattern-matching, list pattern-matching exists both as a right-hand side and an instruction (we show below the instruction version of the semantic rules, for a change).
+
+$$
+\inferrule* [left=(ins\_list\_match\_nil)]
+    { \{ var = [] \} @ rval = rval' \\ E \vdash_{ins} I_1 / rval \rightarrow val }
+    { E \vdash_{ins} match\:var\:with [] \rightarrow I_1 | var_1 :: var_2 \rightarrow I_2\:end / rval' \rightarrow val }
+$$
+
+$$
+\inferrule* [left=(ins\_list\_match\_cons)]
+    { \{ var_1 = val_1 :: tl \} @ rval = rval' \\ \{ var_1 = val_1 ; var_2 = tl \} @ rval = rval'' }
+    { E \vdash_{ins} match\:var\:with [] \rightarrow I_1 | var_1 :: var_2 -> I_2\:end / rval' \rightarrow val }
+$$
+
+More specific to lists (and to maps, as we'll see) are the \lstinline{map} (as a right-hand-side) and \lstinline{for} (as an instruction) operations, which mirror the !ITER! instruction.
+
+TODO
+
+\subsubsection{Maps}
 
 TODO
 
 \section{Compiler to Mi-Cho-Coq}
+
+With all these rules written down (plus the typing rules), we now have to write a compiler answering to this formal specification, that is a compiler that, from a well-typed Albert program, compiles to a well typed Michelson program, with the type and semantics of the Michelson program being equivalent to the those of the Michelson's program. In order to specify and prove these properties, we'll first have to define a relation between Albert's type and Michelson's type, as well as a relation between Albert's values and Michelson's values (as we'll see in \ref{alberteqmichelson}).
+
+In order to be able to use a formal specification of Michelson (which is already written in Coq), we'll compile to Mi-Cho-Coq's AST. More specifically, we'll target Mi-Cho-Coq's untyped syntax, which can then be turned back into the typed syntax using Mi-Cho-Coq's typer (if the untyped program is well-typed of course).
+
+\subsection{Equivalence between Albert and Michelson}
+\label{alberteqmichelson}
+
+\subsection{Compiling instructions}
+
+\chapter*{Conclusion}
+\addcontentsline{toc}{chapter}{Conclusion}
 
 \bibliography{biblio}{}
 \bibliographystyle{unsrt}
