@@ -17,7 +17,7 @@
 
 \title{Compiling a low-level language to Michelson}
 \author{Basile Pesin,\\
-  under the supervision of Bruno Bernardo,\\
+  under the supervision of Bruno Bernardo, Raphaël Caurderlier, Julien Tesson\\
   Nomadic Labs}
 
 \begin{document}
@@ -125,7 +125,7 @@ Despite not looking much more complicated than the weather insurance smart contr
 
 \section{Tooling Michocott}
 
-Michocott is an implementation of Mi-Cho-Coq, using the Ott~\cite{ottLang} programming language. From a set of grammar definitions and rules, Ott can generate typing and semantic rules for Coq (and other proof assistants), a menhir parser, as well as latex documentation.
+Michocott is an implementation of Mi-Cho-Coq, using the Ott~\cite{ottLang} programming language. From a set of grammar definitions and rules, Ott can generate typing and semantic rules for Coq (and other proof assistants), a menhir parser, as well as latex documentation. We'll use Ott later on to define the grammar, typing and semantic rules for the Albert programming language in section \ref{albertSemantics}.
 
 \subsection{Documentation generation}
 
@@ -231,6 +231,7 @@ def vote :
 Two difficulties still arise from writing an Albert contract, and create verbosity : first, the need to constantly assign every intermediate value to a variables, and second, the need to explicitly duplicate each resource the program has to use twice. These are unfortunately necessary in order to keep Albert's resource management close to Michelson's stack based management.
 
 \section{Formal semantics}
+\label{albertSemantics}
 
 I started my work on Albert by writing down the formal semantics of the language, mostly by following the typing rules. I'll give below the highlights of the rules.
 
@@ -438,7 +439,7 @@ $$
     { E \vdash_{ins} match\:var\:with [] \rightarrow I_1 | var_1 :: var_2 -> I_2\:end / rval' \rightarrow val }
 $$
 
-More specific to lists (and to maps, as we'll see) are the \lstinline{map} (as a right-hand-side) and \lstinline{for} (as an instruction) operations, which mirror the !ITER! instruction. We'll show below the \listinline{map} semantic rules.
+More specific to lists (and to maps, as we'll see) are the \lstinline{map} (as a right-hand-side) and \lstinline{for} (as an instruction) operations, which mirror the !ITER! instruction. We'll show below the \lstinline{map} semantic rules.
 
 $$
 \inferrule* [left=(rhs\_list\_map\_nil)]
@@ -454,7 +455,7 @@ $$
 
 \subsubsection{Maps}
 
-Albert also implements associative maps, like Michelson does. These maps implement classic \texttt{get} and \texttt{update} operations, where \texttt{get} returns takes a key and returns an option, and update takes both a key and an option (to allow to remove a value from the map). The semantics of for the get operation are outlined below.
+Albert also implements associative maps, like Michelson does. These maps implement classic \texttt{get} and \texttt{update} operations (both as right-hand sides), where \texttt{get} returns takes a key and returns an option, and \texttt{update} takes both a key and an option (to allow to remove a value from the map). The semantics for the \texttt{get} operation are outlined below.
 
 $$
 \inferrule* [left=(get\_nil)]
@@ -475,7 +476,7 @@ $$
    { E \vdash_{rhs} var[x] / \{ var = { val_1 |-> val_1' ; mval } ; x = val_2 \} \rightarrow val'_2 }
  $$
 
-\noindent And the semantics for the update operation are the following.
+\noindent And the semantics for the \texttt{update} operation are the following.
 
 $$
 \inferrule* [left=(update\_nil\_none)]
@@ -531,12 +532,114 @@ $$
 
 With all these rules written down (plus the typing rules), we now have to write a compiler answering to this formal specification, that is a compiler that, from a well-typed Albert program, compiles to a well typed Michelson program, with the type and semantics of the Michelson program being equivalent to the those of the Michelson's program. In order to specify and prove these properties, we'll first have to define a relation between Albert's type and Michelson's type, as well as a relation between Albert's values and Michelson's values (as we'll see in \ref{alberteqmichelson}).
 
-In order to be able to use a formal specification of Michelson (which is already written in Coq), we'll compile to Mi-Cho-Coq's AST. More specifically, we'll target Mi-Cho-Coq's untyped syntax, which can then be turned back into the typed syntax using Mi-Cho-Coq's typer (as long as the untyped program respects Michelson's typing rules of course). This is simpler than compiler to the typed syntax, but means we'll also have to prove the compiled Michelson program is correctly typed separately.
+In order to be able to use a formal specification of Michelson (which is already written in Coq), we'll compile to Mi-Cho-Coq's AST. More specifically, we'll target Mi-Cho-Coq's untyped syntax, which can then be turned back into the typed syntax using Mi-Cho-Coq's typer (as long as the untyped program respects Michelson's typing rules of course). This is simpler than compiling to the typed syntax, but means we'll also have to prove the compiled Michelson program is correctly typed separately.
+
+\subsection{Architecture of the program and parser}
+
+TODO
 
 \subsection{Equivalence between Albert and Michelson}
 \label{alberteqmichelson}
 
+In order to compiler an Albert program to a Michelson program, we'll need to be able to convert Albert's types to Michelson's types. Moreover, in order to be able to cover the \texttt{rhs\_val} right-hand side to a !PUSH t v! instruction, where !v! is a Michelson value, we'll also need to be able to convert Albert's value literals to Michelson values. Fortunately, it seems obvious that if types (and they are, since Albert was specifically designed for them to be) are translatable, values are too.
+
+\paragraph{Primitives}
+
+The basic types of Albert are pretty easy to translate to Michelson's types, as they have been specifically designed to. The numerical types \texttt{nat}, \texttt{int}, \texttt{timestamp} and \texttt{mutez} translate to the same type in Michelson. That is also the case for the \texttt{string} and \texttt{bytes} types. The basic collections types (\texttt{list}, \texttt{map} and \texttt{set}) also are translated to their counterpart in Michelson.
+
+\paragraph{Records}
+More interesting is the implementation of Record types. As records are not present in Michelson, we must encode Albert's records in Michelson's type systems. Their are two uses of records in Albert. The simplest one is to generalize product types. In this case, we'll want to simply represent records by nested products. In order to know the order of the fields in our nested product, we'll reuse our lexicographic order to organize the fields. We also decide that the left element of the pair is always a field, and that the right element contains the rest of the elements of the record. For instance, the record type \lstinline|{a : nat ; b : int ; c : string ; d : mutez}| translates to !(nat * (int * (string * mutez)))!. An empty record translates to a !Unit! (this is coherent with the typing rules of Albert). In order to avoid using one more pair that needed, a singleton record also translates to a simple value. Using these conventions, Albert's pairs (which are equivalent to binary records) simply translate to Michelson's pair, which seems ideal.
+
+The second use of records is to abstract Michelson's stack. In this case, there is no need to encode the record in any particular data structure, since it's used to represent the state of the stack. However, it's important to consider the actual order of values on the stack. Our first solution was to always push values on top of the stack, to keep track of their position, and then to retrieve them when needed using the !DIG! instruction (!DIG n! moves the $n^{th}$ element of the stack to it's top). However, while this approach worked fine with linear programs, when we started to manipulate branching instructions, we figured that this naive approach lost the guarantee of the two end-of-branch stacks being equal, while their Albert type were, as the order could possibly not be the same. In order to avoid this issue, we decided to always have the stack in the same order as the record type representing it between two Albert instructions. This necessitates to often !DUG! values into the stack (!DUG n! moves the first element of the stack to it's $n^{th}$ position, and is the opposite of !DIG n!), which creates an added cost. We already optimize the produced code by removing the sequences of !DUG n; DIG n!, as well as !DIG 0! and !DUG 0! (which both do nothing). Future optimisations could improve on these simple optimisations by eliminating some of the other useless !DIG! and !DUG!.
+
+\paragraph{Variants}
+
+As with records, we need a trick to encode variants in Michelson, since it does not contain them. We'll proceed similarly to our record technique, by encoding a variant in nested !or! types. Again, we'll use lexicographic order to sort the constructor of the variant, in order to predictably construct or pattern match on the variant. The type \lstinline{[a : nat ; b : int ; c : string ; d : mutez]} will then be translated to !(nat or (int or (string or mutez)))!. As we saw above, we don't allow for empty variants, as we'd have no way to encode an empty type in Michelson. A singleton variant is translated to the value without any constructor.
+
+As was the case with records, the Albert \lstinline{or} type is now equivalent to Michelson's (since \lstinline{Left} comes in lexicographic order before \lstinline{Right}). We then add special cases in the translater for the \lstinline{bool} and \lstinline{option} variants, which must simply be translated to their counterpart.
+
 \subsection{Compiling instructions}
+
+Now that we know how to translate Albert's types and values into Michelson's, it's time to move on to the compilation of a program. Later on, we'll use the function \texttt{michType()} to denote the translation from Albert's type to Michelson's type, and \texttt{michData} to denote the translation from Albert's values to Michelson's data.
+
+\subsubsection{Right-hand sides}
+
+We'll begin with the right-hand sides, which, has we've seen, contain most of the calculations present in the language. Compiling a right-hand side always put the resulting value on top of the stack.
+
+First off, arguments are usually pretty easy to compile, as they consist mostly in either values, variable calls or record construction (the latter being more complex).\\
+
+Values are pretty easy to compile, as they mainly consist in pushing Michelson's data onto the stack. However, we have to take into account a small specific case : some types can't actually be used with !PUSH! in Michelson, as they are not storable. Currently, the main type concerned by this limitation is !operation!; since we need to build a !list operation! at the end of our program, in order for it to have a correct Michelson's contract return type, we need to add a specific case to take care of that issue. We simply decide to produce !NIL operation! in that case, instead of a !PUSH!.
+
+{\small
+\begin{longtable}{l|l}
+  Albert code & Michelson code\\
+  \hline
+  value (value $\neq$ ?([] : list operation)?) & !PUSH! \texttt{michType(type(}value\texttt{))} \texttt{michData(}value\texttt{)} \\
+  ?([] : list operation)? & !NIL operation!
+\end{longtable}}
+
+Retrieving a variable from the stack is about as simple, since the only thing to do is to !DIG! it back from it's position, which we can predict given the type of the stack thanks to the lexicographic order on records. The record construction rule is a bit more complicated, as it generalizes the var rule, and also requires us to build the record as we ?DIG? the variables from the stack. We'll note in the followings \texttt{var::stack} the operation of adding \texttt{var} in front of \texttt{stack}, \texttt{stack\#var} the index of \texttt{var} in \texttt{stack}, and \texttt{stack/var}, the \texttt{stack} where the \texttt{var} has been removed. We'll transparently also use the name of the variable to designate it's value on the stack.
+
+{\small
+\begin{longtable}{l|p{6.1cm}|l}
+  Albert code & Michelson code & Resulting stack\\
+  \hline
+  var & !DIG! (stack\#var) & $var::(stack/var)$\\
+  \hline
+  \{ $x_1 = var_1 ; \ldots ; x_k= var_k$ \} & !DIG! $(stack\#var_k)$ !;! \newline !DIG! $((\_::(stack/var_k))\#var_{k-1})$ !;! \newline !PAIR ; !\ldots !;! \newline
+  !DIG! $((\_::(stack/var_k/\ldots/var_2))\#var_1)$ !;! \newline !PAIR!
+  & $(var_1, (\ldots, var_k))::(stack/var_1/\ldots/var_k)$
+\end{longtable}}
+
+As well as simple argument retrieval, right-hand sides also include function calls on arguments, which are quite simple to compile. We simply compile the arguments, which results in the argument value being at the top of the stack. We can then compile the function completely independently of the compiled argument. The resulting Michelson instruction will be one that pops a single elements from the top of the stack, and pushes it's result as a single element to replace it. As we'll see below in \ref{functComp}, user-defined functions also respect this calling convention. We show below the compilation of a function call, as well as some of the functions present in Albert. We note $[|code|]_{stack \rightarrow stack'}$ the result of compiling $code$, which makes $stack$ evolve to $stack'$.
+
+{\small
+\begin{longtable}{l|p{6cm}|l}
+  Albert code & Michelson code & Stack evolution \\
+  \hline
+  f arg & $[|$arg$|]_{stack \rightarrow stack'}$ !;! $[|$f$|]_{stack' \rightarrow stack''}$ & $stack \rightarrow stack''$
+  \hline
+  ?dup? & ! DUP ; PAIR ! & $d::stack \rightarrow (d, d)::stack$
+  \hline
+  ?contract ty? & !CONTRACT! \texttt{michType}(ty) & $a::stack \rightarrow c::stack$\\
+  ?address? & !ADDRESS! & $c::stack \rightarrow a::stack$\\
+  ?implicit_account? & !IMPLICIT_ACCOUNT! & $k::stack \rightarrow c::stack$
+  \hline
+  $(c_{i}: [c_1 : t_1 ; \ldots c_i : t_i ; \ldots ; c_k : t_k])$ & !RIGHT! \texttt{michType}($t_1$) !;! \newline $\ldots$ !;! \newline !LEFT! \texttt{michType}($[c_{i+1} : t_{i+1} ; \ldots ; c_k : t_k]$)
+  & $v::stack \rightarrow (Right (\ldots (Left\:v)))::stack$
+\end{longtable}
+}
+
+Right-hand sides also allow for some simple record manipulation, namely taking a specific field of a record (by projection) and updating a record. Projection is easy to compile by destructuring (using multiple !CDR! and a last !CAR!) the nested pairs and keeping only the correct field. Updating a record is a little more tricky, as it requires to destruct (using !UNPAIR!) and restructure the nested pairs, changing a subset of the fields with new values. In the compiled instruction below, we assume that $var$ is of type \{ $l_1$ : $ty_1$ ; \ldots ; $l_k$ : $ty_k$ \}
+
+{\small
+\begin{longtable}{l|p{10cm}}
+  Albert code & Michelson code \\
+  \hline
+  $var.l_i$ & !CDR ; ! \ldots ! ; CAR! \\
+  \hline
+  \{ var with $l_{i_1}$ = $x_1$ ; \ldots ; $l_{i_j}$ = $x_j$ \} & !UNPAIR ; ! \newline
+  if the current label is to be updated : !DROP ; DIG! $(stack\#x_k)$ \newline
+  !DIP {! \ldots !} ; PAIR ; !
+\end{longtable}
+}
+   
+Arithmetic operations and comparisons are very easy to translate, as we only have to dig the two operands from the stack, and apply the correct operator that is available in Michelson. We show below the code produced for the !MUL! arithmetic operator, as well as the !LE! comparison.
+
+{\small
+\begin{longtable}{l|p{9.5cm}|l}
+  Albert code & Michelson code & Resulting stack\\
+  \hline
+  $x_1$ ?*? $x_2$ & !DIG! $(stack\#x_2)$ !; DIG! $((x_2:(stack/x_1))\#x_1)$ !; MUL! & $(x_1 \times x_2)::(stack/x_1/x_2)$\\
+  \hline
+  $x_1$ ?<=? $x_2$ & !DIG! $(stack\#x_2)$ !; DIG! $((x_2:(stack/x_1))\#x_1)$ !; COMPARE ; LE! & $(x_1 \le x_2)::(stack/x_1/x_2)$\\
+\end{longtable}
+}
+
+\subsubsection{Left-hand sides}
+
+\subsubsection{User-defined function calls}
+\label{functComp}
 
 \chapter*{Conclusion}
 \addcontentsline{toc}{chapter}{Conclusion}
