@@ -17,12 +17,22 @@
 
 \title{Compiling a low-level language to Michelson}
 \author{Basile Pesin,\\
-  under the supervision of Bruno Bernardo, Raphaël Caurderlier, Julien Tesson\\
-  Nomadic Labs}
+  under the supervision of Bruno Bernardo, Raphaël Caurderlier, Julien Tesson}
 
 \begin{document}
 
-\maketitle
+\makeatletter
+    \begin{titlepage}
+        \begin{center}
+            \includegraphics[height=2.5cm]{ressources/su.jpg}
+            \hspace{2cm}
+            \includegraphics[height=2.5cm]{ressources/nomadic.png}\\[35ex]
+            {\huge \bfseries  \@title }\\[10ex] 
+            {\large \@author}\\[40ex] 
+            {\large \@date}
+        \end{center}
+    \end{titlepage}
+\makeatother
 
 \tableofcontents
 
@@ -31,7 +41,7 @@
 
 \section{The Tezos blockchain}
 
-The Tezos ecosystem is centered around the Tezos blockchain. A blockchain is a decentralized database, usually focused on storing data about transactions made by it's users. Blockchains usually use a dedicated token, or cryptocurrency, to quantify these transactions. These currency, while they can't really (yet) be used to buy physical goods outside of the blockchain, can usually be exchanged for traditional government-established currencies, at varying rates. The currencies are often named the same as there related blockchains, and that's the case for Tezos (in the following report, I'll use ``Tezos'' for the blockchain, and ``tez'' (or ``XTZ'') for the related crypto-currency).\\
+The Tezos ecosystem is centered around the Tezos blockchain. A blockchain is a decentralized database, usually focused on storing data about transactions made by it's users. Blockchains usually use a dedicated token, or cryptocurrency, to quantify these transactions. These currency, while they can't really (yet) be used to buy physical goods outside of the blockchain, can usually be exchanged for traditional government-established currencies, at varying rates. The currencies are often named the same as there related blockchains, and that's the case for Tezos (in the following report, I'll use ``Tezos'' for the blockchain, and ``tez'' or ``XTZ'' for the related crypto-currency).\\
 
 The Tezos blockchain, while currently an outsider compared to older, more successful blockchains (like Bitcoin or Ethereum), has several unique features that make it appealing. Namely, the chain gives token holders governance over the chain, being by using a proof-of-stake algorithm, or by allowing it's core protocol to be amended by votes of the community. More details on these features, which won't be discussed in this report, can be found in the Tezos White Paper~\cite{whitePaper}.
 
@@ -156,7 +166,7 @@ In order to complete the chain between the interpreter and Michocott, I added a 
 The implementation of the output is unfortunately, highly specific to Michelson's need (in particular, it sorts and organize the rules according to the instruction they relate too), so it's very unlikely it will be merged into Ott proper, and will probably remain in a Nomadic-specific fork.
 
 \subsection{Parser and lexer improvements}
-
+\label{parserLexerImprov}
 In addition to it's specification and documentation capabilities, Ott can also, using the grammar rules defined for a language, generate both an Ocamllex lexer and a Menhir parser (only for OCaml, but a port to use the coq version of Menhir should be doable with minimal modifications). These functionalities however are still, in the main branch of Ott, a bit lackluster, and I proposed the following changes to fix some of the issues I encountered while using the lexer generation (these changes can be seen in this GitHub PR : \url{https://github.com/ott-lang/ott/pull/52})
 
 \begin{itemize}
@@ -220,7 +230,7 @@ def vote :
                one = 1;
                postvote = prevote + one;
                postvote = Some postvote;
-               final_state = { state0 with param0 |-> postvote };
+               final_state = {| state0 with param0 |-> postvote |};
                out_storage = { votes = final_state; threshold = threshold_copy };
                operations = []
      | False ->
@@ -233,7 +243,7 @@ Two difficulties still arise from writing an Albert contract, and create verbosi
 \section{Formal semantics}
 \label{albertSemantics}
 
-I started my work on Albert by writing down the formal semantics of the language, mostly by following the typing rules. I'll give below the highlights of the rules.
+I started my work on Albert by writing down the formal semantics of the language, mostly by following the typing rules (already written before the start of my internship). I'll give below the highlights of the rules.
 
 \subsection{Bases of the language}
 
@@ -354,7 +364,27 @@ $$
     { E \vdash_{ins} instruction / rval_1 \rightarrow rval_2 }
 $$
 
-This rule is, of course, mirrored in the typing of the instruction.
+This rule is, of course, mirrored in the typing of the instruction.\\
+
+Using these rules (and the typing rules), I proved a few important properties on the base fragment of the language. Firstly, I proved the subject reduction property, which specifies that reducing an instruction according to the semantic rules preserves typing. We formally write this property (for instructions) as
+
+$$
+\inferrule* [left=subject\_reduction]
+            { G \vdash_{val} v : ty \\ G \vdash_{ins} ins : ty \Rightarrow ty' \\ G \vdash_{ins} ins / v \rightarrow v' }
+            { G \vdash_{val} v' : ty' }
+$$
+
+with similar properties on right-hand sides, arguments, functions and left-hand sides. This property allows us to ``connect'' typing and semantic rules. Although it seems simple to prove in most cases, since typing and semantic rules are already quite close, in practice it proved a hassle for some of the rules, as the Coq representation of the rules generated by Ott often uses \texttt{List.map} with pattern destructuring and restructuring, and can be difficult to manipulate.\\
+
+Using this first property, it becomes easy to prove the progress property, which tells us that a well-typed term can always be evaluated. Formally this property as
+
+$$
+\inferrule* [left=progress]
+            { G \vdash_{val} v : ty \\ G \vdash_{ins} ins : ty \Rightarrow ty' }
+            { \exists v', G \vdash_{ins} ins / v \rightarrow v' }
+$$
+
+again, with similar properties defined on the other terms of our language. The progress property is extremely important, as it guarantees that interpretation of the program cannot get stuck if the program is well-typed. In the case of Albert, we're not planning on building an interpreter, but this property is still useful to show the completeness of the semantic rules, as it can only be proved if every typing rule as a corresponding semantic rule. We will later prove that typing and semantics are preserved when compiling to Michelson, which already respects both subject reduction and progress (as most well defined programming languages do).
 
 \subsection{Data structures}
 
@@ -536,7 +566,33 @@ In order to be able to use a formal specification of Michelson (which is already
 
 \subsection{Architecture of the program and parser}
 
-TODO
+As we want to specify and prove the correctness of our compiler, we decided to implement it in Coq. This allows us to easily take advantage of Ott's definition, as well as to easily compile to Mi-Cho-Coq's AST. Moreover, using Coq's extraction facilities, we'll be able to transpile our compiler to OCaml code, which will be easier to run. The compiler follows a classic frontend/middle-end/backend architecture.
+
+\paragraph{Frontend}
+
+Albert's parser and lexer are the only part not implemented in Coq. Indeed, we use Ott functionalities (improved with the modifications outlined in \ref{parserLexerImprov}) to generate both a Menhir parser as well as an Ocamllex lexer for the language. As Ott does not yet support generating Menhir-Coq parser, we've decided to have the generated parser directly in OCaml. We therefore must call the parser's API from the OCaml extracted code (or rather, from a ``main'' function written by hand to tie all the code together) instead of directly from Coq code. Although this does work well, we still need to adapt the code of the parser a little to fix discrepancies between the OCaml code generated by Menhir and the OCaml code extracted from Coq.
+
+The main difference lies in the name of constructors for the AST generated by Ott : while Coq's extraction adds a \texttt{Coq\_} prefix in front of the constructor, Menhir evidently does not. Our (admittedly dirty) fix is to rewrite part of the \textit{parser.mly} file with appropriate regular expressions. While this may seems like a bad idea for certified compiler, we have deemed reasonable not to certify the parser for Albert (as more high-level language compiling to Albert will directly compile to the it's AST anyway, and therefore sidestep any weakness in the parser).
+
+\paragraph{Middle-end}
+
+In order to compile Albert's AST to Mi-Cho-Coq's AST, a first necessary phase is to type-check the Albert program, in order both to make sure the Michelson program will also be well-typed, and to infer the explicit types needed to convert Albert's values to Michelson's values (see \ref{alberteqmichelson}). We therefore implemented the typing-rules of Albert, described in Ott as relations, in functional form.\\
+
+The type checker processes in three separate passes : the first one consists in getting rid of type variables declared by the user, and replacing them by their actual declaration. This simplify the next phases, as we don't have to worry about declared types when verifying type-equivalence during the type-checking proper. As declared types are simple aliases (types can't be recursively declared), these phases amount to (recursive) inlining of the type variables wherever they're found in the program. This phase can fail (and therefore returns in the error monad) if a undeclared type variable is found in the program. 
+
+The second phase, is equally as simple, and cannot even fail : it consists in sorting by lexicographic order both the fields of records and the constructors of variants in type declaration. This pass allows the user to write the fields of records in any order, while guarantying that the type-checker doesn't have to verify that two lists are permutation. The sorting proper uses the Merge Sort algorithm, as implemented in Coq's \textbf{Sorting} library, and is therefore fairly efficient (which could end up mattering if higher-level compiler targeting Albert end up producing large records or variants to represent more complex data-structures or types).\\
+
+The third, most complex and most important phase is of course the type-checking. Currently, the type-checking is entirely ``unidirectional'', as it starts at the top of the program, and simply checks program from top to bottom. This means that the type-checker is actually pretty stupid, as it does not perform any type inference. Since our type-system is monomorphic, this is not too much of a limitation, although we had to add some explicit type annotations in order for the type-checker to fully cover all cases (for instance, an empty list type cannot be inferred, so it need to be annotated).
+
+The type-checker follows the linear typing of Albert, and tracks the state of the record representing the stack throughout the program. Equivalence between two types (for instance, ?bool? and it's equivalent ?variant?) is decided using a function \texttt{type\_eq}, which follows the type equivalence defined in Ott (this equivalence has only been partially proven). The type-checker returns a typed version of the AST, that is an AST where the instructions input and output type have been annotated (only the instructions are annotated as this is enough information for the compiler). Of course, the type-checker can fail if the program is ill-typed, in which case an error message is returned instead of the typed version of the AST. (admittedly, the current error messages could be improved).
+
+The type-checker is supposed to be correct and complete relative to the typing-rules given in Ott, but I haven't had time to prove these properties (aside from some helpful auxiliary lemmas).
+
+\paragraph{Backend}
+
+Once the program has been successfully type-checked, we move on to Michelson code generation. As we've specified, our compiler targets Michelson's untyped syntax, which will take care of the pretty-printing of the program; therefore, we only have to worry about producing a Mi-Cho-Coq untyped AST. As with the type-checker, the compiler returns it's result in an error monad, although the compiler should not fail if the program is well typed (this is a property to be proven). We also want to have other properties of the compiler : namely, that it preserves typing (relative to the Albert-Michelson type equivalence described in \ref{alberteqmichelson}) and semantics. As of now, the first property has only been partially proven, and I haven't had time to tackle the second one.
+
+We'll focus in the following sections on the specifics of compiling an Albert program to Michelson, instruction by instruction.
 
 \subsection{Equivalence between Albert and Michelson}
 \label{alberteqmichelson}
@@ -637,6 +693,49 @@ Arithmetic operations and comparisons are very easy to translate, as we only hav
 }
 
 \subsubsection{Left-hand sides}
+
+While right-hand sides allow for calculations, left-hand sides main use is to put the calculated values back at the right place in the stack. Indeed, as we've seen above, we cannot simply leave the calculated values on top of the stack, as we would risk having two stacks ordered differently at the end of a branching instruction, which Michelson does not allow. Therefore, we use the left hand side of the argument to know, using lexicographic order, the position of the value in the stack. The record destructuring left-hand sides generalize this behaviour, while !UNPAIR!ing the related record. We'll extend our \texttt{stack\#var} to also denote the index where \texttt{var} can be inserted into \texttt{stack} if it is not already present, keeping the lexicographic order.
+
+{\small
+\begin{longtable}{l|l}
+  Albert code & Michelson code\\
+  \hline
+  $var$ = & !DUG! $stack\#var$\\
+  \hline
+  \{ $x_1$ = $var_1$ \ldots $x_k$ = $var_k$ \} = & !UNPAIR ; DUG! $stack\#var_1$ !; UNPAIR ! \ldots \\
+\end{longtable}
+}
+
+\subsubsection{Control instructions}
+
+As we've seen, our language also contains some control instructions, allowing for branching and looping. These instruction can mostly be easily compile to Michelson code, as it includes similar control instruction in it's core language.\\
+
+As Albert uses variant to generalize !or!, !option! and !bool! types, we use pattern matching on the variant's constructors to generalize branching. In addition of the classic pattern matching, which can be used on both variants (using !IF_LEFT!), !bool! (using !IF! and !option! (using !IF_SOME!), and to pattern match on empty or non-empty !list! using !IF_CONS!. Branching exists both as right-hand sides and instructions, but we'll show the compilation of instructions, which are more interesting, below.
+
+{\small
+\begin{longtable}{p{4cm}|p{11cm}}
+  Albert code & Michelson code\\
+  \hline
+  ?match var with?\newline$c_1$ $x_1$ ?->? $i_1$?|? \ldots\newline?|? $c_k$ $x_k$ ?->? $i_k$ ?end? &
+  !DIG! $stack\#var$ !;!\newline
+  !IF_LEFT { DUG! $(stack/var)\#x_1$ !;! $[|i_1|]$ !} { IF_LEFT {! \ldots !} {! \ldots !} }!\\
+  \hline
+  ?match var with?\newline?[] ->? $i_1$\newline?|? $hd$?::?$tl$ ?->? $i_2$ ?end? &
+  !DIG! $stack\#var$ !;!\newline !IF_CONS { DUG! $(stack/var)\#hd$ !; DUG! $(stack/var)\#tl$ !;! $[|i_2|]$ !} {! $[|i_1|]$ !}!
+\end{longtable}
+}
+
+Albert also gives access to the looping instruction present in Michelson (!LOOP!, !LOOP_LEFT!, !ITER! and !MAP!) via both instructions and right-hand sides (!MAP! in particular is of course used with the right-hand side ?map?). We give below the two examples of ?map? (on lists), and ?loop_left? (on or type), which are quite similar in how they compile, even if ?loop_left? is used as an instruction and ?map? as a right-hand side.
+
+{\small
+\begin{longtable}{p{5cm}|p{11cm}}
+  Albert code & Michelson code\\
+  \hline
+  ?map var in var' do rhs done? & !DIG! $stack\#var$ !; MAP { DUG! $(stack/var)\#var'$ !;! $[|rhs|]$ !}!
+  \hline
+  ?loop_left var in var' do ins done? & !DIG! $stack\#var$ !; LOOP_LEFT { DUG! $(stack/var)\#var'$ !;! $[|ins|]$ !} ; DROP!
+\end{longtable}
+}
 
 \subsubsection{User-defined function calls}
 \label{functComp}
