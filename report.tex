@@ -653,13 +653,13 @@ As well as simple argument retrieval, right-hand sides also include function cal
 \begin{longtable}{l|p{6cm}|l}
   Albert code & Michelson code & Stack evolution \\
   \hline
-  f arg & $[|$arg$|]_{stack \rightarrow stack'}$ !;! $[|$f$|]_{stack' \rightarrow stack''}$ & $stack \rightarrow stack''$
+  f arg & $[|$arg$|]_{stack \rightarrow stack'}$ !;! $[|$f$|]_{stack' \rightarrow stack''}$ & $stack \rightarrow stack''$\\
   \hline
-  ?dup? & ! DUP ; PAIR ! & $d::stack \rightarrow (d, d)::stack$
+  ?dup? & ! DUP ; PAIR ! & $d::stack \rightarrow (d, d)::stack$\\
   \hline
   ?contract ty? & !CONTRACT! \texttt{michType}(ty) & $a::stack \rightarrow c::stack$\\
   ?address? & !ADDRESS! & $c::stack \rightarrow a::stack$\\
-  ?implicit_account? & !IMPLICIT_ACCOUNT! & $k::stack \rightarrow c::stack$
+  ?implicit_account? & !IMPLICIT_ACCOUNT! & $k::stack \rightarrow c::stack$\\
   \hline
   $(c_{i}: [c_1 : t_1 ; \ldots c_i : t_i ; \ldots ; c_k : t_k])$ & !RIGHT! \texttt{michType}($t_1$) !;! \newline $\ldots$ !;! \newline !LEFT! \texttt{michType}($[c_{i+1} : t_{i+1} ; \ldots ; c_k : t_k]$)
   & $v::stack \rightarrow (Right (\ldots (Left\:v)))::stack$
@@ -731,11 +731,13 @@ Albert also gives access to the looping instruction present in Michelson (!LOOP!
 \begin{longtable}{p{5cm}|p{11cm}}
   Albert code & Michelson code\\
   \hline
-  ?map var in var' do rhs done? & !DIG! $stack\#var$ !; MAP { DUG! $(stack/var)\#var'$ !;! $[|rhs|]$ !}!
+  ?map var in var' do rhs done? & !DIG! $stack\#var$ !; MAP { DUG! $(stack/var)\#var'$ !;! $[|rhs|]$ !}!\\
   \hline
   ?loop_left var in var' do ins done? & !DIG! $stack\#var$ !; LOOP_LEFT { DUG! $(stack/var)\#var'$ !;! $[|ins|]$ !} ; DROP!
 \end{longtable}
 }
+
+The noticeable change between the two instructions is the addition of the !DROP! at the end of the ?loop_left? compilation. This is necessary because Michelson actually puts the !Right! element extracted from the !or! at the end of the loop. Since we don't want to use it here, we !DROP! it from the stack.
 
 \subsubsection{User-defined function calls}
 \label{functComp}
