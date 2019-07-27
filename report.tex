@@ -27,8 +27,8 @@
             \includegraphics[height=2.5cm]{ressources/su.jpg}
             \hspace{2cm}
             \includegraphics[height=2.5cm]{ressources/nomadic.png}\\[35ex]
-            {\huge \bfseries  \@title }\\[10ex] 
-            {\large \@author}\\[40ex] 
+            {\huge \bfseries  \@title }\\[10ex]
+            {\large \@author}\\[40ex]
             {\large \@date}
         \end{center}
     \end{titlepage}
@@ -37,8 +37,8 @@
 \vspace*{\fill}
 \begin{center}
 \section*{Thanks}
-I'd first like to thank Bruno Bernardo for offering this internship and learning opportunity to me. I also thank him, along with Raphaël Caurdelier and Julien Tesson, both for helping me when I encountered difficulties, and for proofreading this document. Finally, I'd also like to thank the whole Nomadic Lab team for being so welcoming.
-\noindent 
+I'd first like to thank Bruno Bernardo for offering this internship and learning opportunity to me. I also thank him, along with Raphaël Caurdelier and Julien Tesson, both for helping me when I encountered difficulties, and for proofreading this document. Finally, I'd also like to thank the whole Nomadic Labs team for being so welcoming.
+\noindent
 \end{center}
 \vspace*{\fill}
 
@@ -51,7 +51,7 @@ I'd first like to thank Bruno Bernardo for offering this internship and learning
 
 The Tezos ecosystem is centered around the Tezos blockchain. A blockchain is a decentralized database, usually focused on storing data about transactions made by its users. Blockchains usually use a dedicated token, or cryptocurrency, to quantify these transactions. These currencies, while they can't really (yet) be used to buy physical goods outside of the blockchain, can usually be exchanged for traditional government-established currencies, at varying rates. The currency of the Tezos blockchain is called \emph{tez}.
 
-The Tezos blockchain, while currently an outsider compared to older, more successful blockchains (like Bitcoin or Ethereum), has several unique features that make it appealing. Namely, the chain gives token holders governance over the chain, by allowing its core protocol to be amended by votes of the community. More details on these features, which won't be discussed in this report, can be found in the Tezos White Paper~\cite{whitePaper}.
+The Tezos blockchain, while currently an outsider compared to older, more successful blockchains (like Bitcoin or Ethereum), has several unique features that make it appealing. Namely, the chain gives token holders governance over the chain, by allowing its core protocol to be amended by votes of the community. Nomadic Labs is one of the most active actors in the Tezos ecosystem, maintaining and improving the Tezos open-source codebase; in particular, they've worked on updates of the protocal, including the Babylone update, which is being voted at time of writing. More details on these features, which won't be discussed in this report, can be found in the Tezos White Paper~\cite{whitePaper}.
 
 More to the point of this work, Tezos puts a strong emphasis on safety : the chain is implemented in OCaml, a statically typed programming language, which prevents some runtime errors. As we will see below, formal verification is also a focus on the work around the chain, and will be the focus of this report.
 
@@ -96,6 +96,48 @@ code { DUP; DUP;
        NIL operation; SWAP; CONS;
        PAIR };
 \end{lstlisting}
+
+Let's take a look at our voting program: First, the description of the
+storage and parameter types is given on lines \texttt{1-2}.  Then the
+code of the contract is given.
+On line \texttt{5}, !AMOUNT! pushes on the stack the amount
+of (in $\mu$tez) sent to the contract address by the user. The threshold amount
+(5tez) is also pushed on the stack on line \texttt{6} and compared to
+the amount sent:
+!COMPARE! pops the two top values of the stack, and pushes
+either -1, 0 or 1 depending on the comparison between the
+value. !GT! then pops this value and pushes !true!
+if the value is 1. If the threshold is indeed greater than the
+required amount, the first branch of the !IF! is executed
+and !FAIL! is called, interrupting the contract execution
+and cancelling the transaction.
+
+If the value was !false!, the execution continues on line
+\texttt{9}, where we prepare the stack for the next action:
+!DUP! copies the top of the stack, we then manipulate the
+tail of the stack while preserving it's head using !DIP!:
+there, we take the right element of the !(chosen, candidates)! pair
+with !CDR!, and we duplicate it again.  By closing the block
+guarded by !DIP! we recover the former stack's top, and the following
+line takes its left element with !CAR!, and duplicates it.
+
+On line \texttt{12}, we use !DIP! to protect the top of the
+stack again. !GET! then pops !chosen! and
+!candidates! from  the stack, and pushes an
+option containing the number of votes of the candidate, if it was
+found in the map. If it was not found, !ASSERT_SOME! makes
+the program fail. On line \texttt{15}, the number of votes is
+incremented by !ADD!, and packed into an option type by
+!SOME!.
+
+We then leave the !DIP! block to regain access to
+value at the top of the stack (!chosen!). On line
+\texttt{18}, !UPDATE! pops the three values remaining
+on top of the stack, and pushes the !candidates! map updated
+with the incremented value for !chosen!. Finally, we push an
+empty list of operations with !NIL operation!, and pair the
+two elements on top of the stack to get the correct return type.\\
+
 Given the description above, we can easily give a specification of the contract. In the followings specifications, I'll note as ``preconditions'' the conditions that must be verified for the contract not to call \lstinline{FAIL} (or a related macro). The ``postconditions'' fully describe the new state of the storage at the end of the execution, as well as the potential generated operations.
 
 {\small
@@ -203,9 +245,9 @@ $$
 
 \subsection{Types}
 
-In order to fully use the possibilities of Michelson, Albert implements all the basic types implemented by Michelson, that is : \texttt{int}, \texttt{nat}, \texttt{mutez}, \texttt{timestamp} for numeric types, \texttt{string} and \texttt{bytes}. Albert also implements the same data structures as Michelson, \texttt{list}, \texttt{set} and \texttt{map}.
-    
-Moreover, Albert generalizes \texttt{pair} types with \texttt{record}, and \texttt{or}, \texttt{option} and \texttt{bool} by n-ary \texttt{variant} with arbitrary constructors. For ease of use, Albert also adds these specific types to its core language, making them equivalent to the similar record type (for instance, \texttt{option ty} is equivalent to the variant \texttt{[None : unit | Some : ty]}).
+In order to fully use the possibilities of Michelson, Albert implements all the basic types implemented by Michelson, that is : ?int?, ?nat?, ?mutez?, ?timestamp? for numeric types, ?string? and ?bytes?. Albert also implements the same data structures as Michelson, ?list?, ?set? and ?map?.
+
+Moreover, Albert generalizes !pair! types with ?record?, and ?or?, ?option? and ?bool? by n-ary ?variant? with arbitrary constructors. For ease of use, Albert also adds these specific types to its core language, making them equivalent to the similar record type (for instance, ?option ty? is equivalent to the variant ?[None : unit | Some : ty]?).
 
 \subsection{Example smart-contract}
 
@@ -219,7 +261,7 @@ def vote :
    { store : storage_ty ; param : string } ->
    { operations : list operation ; out_storage : storage_ty } =
 
-    (store0; store1) = dup store;
+    { car = store0; cdr = store1 } = dup store;
     threshold = store1.threshold;
     { car = threshold; cdr = threshold_copy } = dup threshold;
     ok = amount < threshold;
@@ -574,13 +616,13 @@ As we want to specify and prove the correctness of our compiler, we decided to i
 
 Albert's parser and lexer are the only part not implemented in Coq. Indeed, we use Ott functionalities (improved with the modifications outlined in \ref{parserLexerImprov}) to generate both a Menhir parser as well as an Ocamllex lexer for the language. As Ott does not yet support generating Menhir-Coq parser, we've decided to have the generated parser directly in OCaml. We therefore must call the parser's API from the OCaml extracted code (or rather, from a ``main'' function written by hand to tie all the code together) instead of directly from Coq code. Although this does work well, we still need to adapt the code of the parser a little to fix discrepancies between the OCaml code generated by Menhir and the OCaml code extracted from Coq.
 
-The main difference lies in the name of constructors for the AST generated by Ott : while Coq's extraction adds a \texttt{Coq\_} prefix in front of the constructor, Ott does not when producing the \texit{parser.mly} file used by Menhir to generate the parser. Our (admittedly dirty) fix is to rewrite part of the \textit{parser.mly} file with appropriate regular expressions. While this may seems like a bad idea for certified compiler, we have deemed reasonable not to certify the parser for Albert (as more high-level language compiling to Albert will directly compile to the its AST anyway, and therefore sidestep any weakness in the parser).
+The main difference lies in the name of constructors for the AST generated by Ott : while Coq's extraction adds a \texttt{Coq\_} prefix in front of the constructor, Ott does not when producing the \textit{parser.mly} file used by Menhir to generate the parser. Our (admittedly dirty) fix is to rewrite part of the \textit{parser.mly} file with appropriate regular expressions. While this may seems like a bad idea for certified compiler, we have deemed reasonable not to certify the parser for Albert (as more high-level language compiling to Albert will directly compile to the its AST anyway, and therefore sidestep any weakness in the parser).
 
 \paragraph{Middle-end}
 
 In order to compile Albert's AST to Mi-Cho-Coq's AST, a first necessary phase is to type-check the Albert program, in order both to make sure the Michelson program will also be well-typed, and to infer the explicit types needed to convert Albert's values to Michelson's values (see \ref{alberteqmichelson}). We therefore implemented the typing-rules of Albert, described in Ott as relations, in functional form.\\
 
-The type checker processes in three separate passes : the first one consists in getting rid of type aliases declared by the user, and replacing them by their actual declaration. This simplify the next phases, as we don't have to worry about declared types when verifying type-equivalence during the type-checking proper. As declared types are simple aliases (types can't be recursively declared), these phases amount to (recursive) inlining of the type aliases wherever they're found in the program. This phase can fail (and therefore returns in the error monad) if an undeclared type alias is found in the program. 
+The type checker processes in three separate passes : the first one consists in getting rid of type aliases declared by the user, and replacing them by their actual declaration. This simplify the next phases, as we don't have to worry about declared types when verifying type-equivalence during the type-checking proper. As declared types are simple aliases (types can't be recursively declared), these phases amount to (recursive) inlining of the type aliases wherever they're found in the program. This phase can fail (and therefore returns in the error monad) if an undeclared type alias is found in the program.
 
 The second phase, is equally simple, and cannot even fail : it consists in sorting by lexicographic order both the fields of records and the constructors of variants in type declaration. This pass allows the user to write the fields of records in any order, while guarantying that the type-checker doesn't have to verify that two lists are permutations of each other. The sorting proper uses the Merge Sort algorithm, as implemented in Coq's \textbf{Sorting} library, and is therefore fairly efficient (which could end up mattering if higher-level compiler targeting Albert end up producing large records or variants to represent more complex data-structures or types).\\
 
@@ -681,7 +723,7 @@ Right-hand sides also allow for some simple record manipulation, namely taking a
   !DIP {! \ldots !} ; PAIR ; !
 \end{longtable}
 }
-   
+
 Arithmetic operations and comparisons are very easy to translate, as we only have to dig the two operands from the stack, and apply the correct operator that is available in Michelson. We show below the code produced for the !MUL! arithmetic operator, as well as the !LE! comparison.
 
 {\small
@@ -712,7 +754,7 @@ While right-hand sides allow for calculations, left-hand sides main use is to pu
 
 As we've seen, our language also contains some control instructions, allowing for branching and looping. These instruction can mostly be easily compile to Michelson code, as it includes similar control instruction in its core language.\\
 
-As Albert uses variant to generalize !or!, !option! and !bool! types, we use pattern matching on the variant's constructors to generalize branching. In addition of the classic pattern matching, which can be used on both variants (using !IF_LEFT!), !bool! (using !IF! and !option! (using !IF_SOME!), and to pattern match on empty or non-empty !list! using !IF_CONS!. Branching exists both as right-hand sides and instructions, but we'll show the compilation of instructions, which are more interesting, below.
+As Albert uses variant to generalize !or!, !option! and !bool! types, we use pattern matching on the variant's constructors to generalize branching. In addition of the classic pattern matching, which can be used on both variants (using !IF_LEFT!), !bool! (using !IF! and !option! (using !IF_SOME!), and to pattern match on empty or non-empty !list! using !IF_CONS!. Branching exists both as right-hand sides (in which case they're mostly useful with user defined function calls, which is the only way to ``insert'' instructions into a right-hand side) and instructions, but we'll show the compilation of instructions, which are more interesting, below.
 
 {\small
 \begin{longtable}{p{4cm}|p{11cm}}
@@ -752,6 +794,105 @@ We must also consider the case of the entry function, that is the function which
 
 \chapter*{Conclusion}
 \addcontentsline{toc}{chapter}{Conclusion}
+
+At the end of the day, the product of our work is a working prototype of the Albert Compiler, able to generate well-typed Michelson program. I have written and tested a few programs, including the voting smart contract described above, as well as a multisig~\cite{multisigArthur} contract (see \ref{appendix:multisigAlbert} for the Albert version). I was able to originate these contracts on a Tezos sandboxed node, and to run them, yielding the expected results. As a proof-of-concept for the Albert programming language, this is a success. Moreover, the improvements brought to Ott (in particular regarding the parser generation), although they have not yet been merged into the core software, will still be usable by Nomadic Labs to continue working on both Albert and future, higher-level languages targeting it. Although I didn't focus on it, Ott could also very well be used to generate documentation in the ReStructuredText format for Albert.
+
+Further works include, of course, formally proving the correctness of the both the type-checker and compiler, which I unfortunately didn't have time to complete. Moreover, writing further optimisations of the compiler would also be useful, as the Michelson code currently generated consists mostly of explicit stack manipulations, which could possibly be improved using a stack optimization technique, such as the JUMBLE~\cite{jumble} macro. These optimizations would of course also need to be proven correct (that is that they keep both the typing and the semantics of the program intact). Improving error messages both for type-checking and parsing would go a long way in making the compiler more usable.\\
+
+On a personal note, these works allowed to discover many interesting concept related to blockchains in general and stack-based programming languages such as Michelson in particular. Moreover, I was able to improve and develop my skills in both programming and verifying programs using Coq, especially through writing a full compiler, which was a very formative exercise. This knowledge, as well as the taste I've acquired for certified programming, will certainly inform my future study path, beginning as soon as next year. Moreover, working in Nomadic Labs, a company dedicating most of its ressources to research and development, and working close to public research has also given me a new interesting point of view on research, a sector which I already intend to make my career in. I therefore plan to continue working in related fields of verified programming.
+
+\appendix
+
+\chapter{More Albert contracts}
+
+\section{The multisig contract}
+\label{appendix:multisigAlbert}
+
+The multisig (multi-signature) smart-contract allows for a way of access control : the contract is originated with a list of authorized public keys, and a threshold. To issue a command to the multi-sig, the user must send more signature than the treshold specifies. If the user does not send enough signature, or if at least one of the signature is incorrect, the execution stops. Moreover, the contract also uses a counter that increases at each successful execution to avoid replay attacks (where an opponent would intercept the transaction and send it a second time). While multisigs can be written with intricate payloads in mind (up to and including starting the execution of another contract) the one below is quite simple : either it is asked to transfer a sum from it's balance to another contract, to change it's delegate or to change it's access-control parameters (set of key and treshold).
+
+\begin{lstlisting}[language=Albert]
+type parameter_ty = { payload :
+                      { action : [ ChangeKeys : { keys : list key ; threshold : nat }
+                                   | SetDelegate : option key_hash
+                                   | Transfer : { am : mutez ; destination : contract unit }] ;
+                        counter : nat } ;
+                      sigs : list (option signature) }
+
+type storage_ty = { keys : list key ; stored_counter : nat ; threshold : nat }
+
+def multisig : { params : parameter_ty ; storage : storage_ty } ->
+               { ops : list operation ; storage : storage_ty } =
+    // Pack the payload
+    { car = storage0 ; cdr = storage } = dup storage;
+    { car = params0; cdr = params } = dup params;
+    { payload = payload ; sigs = sigs } = params0;
+    se = self; add = address se;
+    payload = { add = add ; payload = payload };
+    packedPayload = pack payload;
+
+    // Check the anti-replay counter
+    { car = params0 ; cdr = params } = dup params;
+    { car = storage0 ; cdr = storage } = dup storage;
+    payload = params0.payload; counter = payload.counter;
+    stored_counter = storage0.stored_counter;
+    ok = counter == stored_counter;
+    match ok with
+    False f -> failwith "Incorrect counter"
+    | True t -> drop t
+    end;
+
+    // Compute the number of valid signatures
+    valid = 0;
+    { keys = keys ; stored_counter = c ; threshold = threshold } = storage0;
+    drop c;
+    for k in keys do
+        match sigs with
+        [] -> failwith "Not enough sigs sent"
+        | s::sigs ->
+          match s with
+          None u -> drop u; drop k
+          | Some s ->
+            { car = packedPayload0 ; cdr = packedPayload } = dup packedPayload;
+            ok = check_signature k s packedPayload0;
+            match ok with
+            False u -> failwith "Invalid signature"
+            | True u -> drop u; one = 1; valid = valid + one
+            end
+          end
+        end
+    done; drop sigs;
+
+    // Check that the number of signatures is sufficient
+    ok = valid >= threshold;
+    match ok with
+    False u -> failwith "Not enough signatures"
+    | True u -> drop u
+    end;
+    drop packedPayload;
+
+    // Increment the counter
+    { car = storage1 ; cdr = storage2 } = dup storage;
+    counter = storage2.stored_counter;
+    one = 1; counter = counter + one;
+    storage = { storage1 with stored_counter = counter };
+
+    // Execute the payload
+    ops = ([] : list operation);
+    payload = params.payload; action = payload.action;
+    match action with
+    Transfer t ->
+      { am = am ; destination = dest } = t;
+      u = {};
+      transf = transfer_tokens u am dest;
+      ops = transf::ops
+    | SetDelegate k ->
+      setd = set_delegate k;
+      ops = setd::ops
+    | ChangeKeys ck ->
+      { keys = keys ; threshold = thresh } = ck;
+      storage = { storage with keys = keys ; threshold = thresh }
+    end
+\end{lstlisting}
 
 \bibliography{biblio}{}
 \bibliographystyle{unsrt}
