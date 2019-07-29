@@ -179,7 +179,7 @@ We can then specify this smart-contract as follows (\texttt{amount} refers to th
   & $\forall$ c $\in$ \texttt{Keys}(storage), c $\neq$ chosen $\Rightarrow$ new\_storage[c] = storage[c]
 \end{longtable}}
 
-Despite not looking much more complicated than the weather insurance smart contract, the specification of the vote smart-contract was slightly harder to prove. Indeed, in order to prove most of the postconditions, we had to prove a few lemmas on the map datastructure, and the relations between the functions ($mem$, $get$ and $update$) used to manipulate it. These lemmas were integrated in the library of Mi-Cho-Coq, and will most likely be useful to prove other contracts in the future.
+Despite not looking much more complicated than the weather insurance smart contract, the specification of the vote smart-contract was slightly harder to prove (the Coq proof script is available at \url{https://gitlab.com/nomadic-labs/mi-cho-coq/blob/master/src/contracts_coq/vote.v}). Indeed, in order to prove most of the postconditions, we had to prove a few lemmas on the map datastructure, and the relations between the functions ($mem$, $get$ and $update$) used to manipulate it. These lemmas were integrated in the library of Mi-Cho-Coq, and will most likely be useful to prove other contracts in the future.
 
 %\subsection{List manipulations} TODO ?
 
@@ -769,7 +769,7 @@ As Albert uses variant to generalize !or!, !option! and !bool! types, we use pat
 \end{longtable}
 }
 
-Albert also gives access to the looping instruction present in Michelson (!LOOP!, !LOOP_LEFT!, !ITER! and !MAP!) via both instructions and right-hand sides (!MAP! in particular is of course used with the right-hand side ?map?). We give below the two examples of ?map? (on lists), and ?loop_left? (on or type), which are quite similar in how they compile, even if ?loop_left? is used as an instruction and ?map? as a right-hand side.
+Albert also gives access to the looping instruction present in Michelson (!LOOP!, !LOOP_LEFT!, !ITER! and !MAP!) via both instructions and right-hand sides (!MAP! in particular is of course used with the right-hand side ?map?). We give below the two examples of ?map? (which iterates on lists), and ?loop_left? (which repeats while the variables contains the Left constructor of an ?or? type), which are quite similar in how they compile, even if ?loop_left? is used as an instruction and ?map? as a right-hand side.
 
 {\small
 \begin{longtable}{p{5cm}|p{11cm}}
@@ -804,6 +804,49 @@ On a personal note, these works allowed to discover many interesting concept rel
 \appendix
 
 \chapter{More Albert contracts}
+
+\section{Auction}
+
+This contract, inspired by \url{https://www.michelson-lang.com/contract-a-day.html#sec-1-11}, implements, as its name indicate, a simple auction process. An (out of chain) item is placed in auction, and any user can place a bid during a set time period. The bid is accepted only if higher than the previous one, and of course, the outbidden is refunded their previous bid at an address they provided when bidding.
+
+\begin{lstlisting}
+type parameter_ty = key_hash
+type storage_ty = { endDate : timestamp ; highestBid : mutez ; lastBidder : key_hash }
+
+def bid : { params : parameter_ty ; storage : storage_ty } ->
+          { op : list operation ; storage : storage_ty } =
+    // Check if the auction has ended
+    { car = sto0 ; cdr = storage } = dup storage;
+    endDate = sto0.endDate;
+    no = now; ok = no < endDate;
+    match ok with
+    True u -> drop u
+    | False u -> failwith "The auction is over"
+    end;
+
+    // Check if the new bid is higher than best
+    { car = sto0 ; cdr = storage } = dup storage;
+    highest = sto0.highestBid;
+    am = amount; ok = am > highest;
+    match ok with
+    True u -> drop u
+    | False u -> failwith "Not enough tez sent to replace highest bidder"
+    end;
+
+    // Refund the previous bidder
+    { car = sto0 ; cdr = storage } = dup storage;
+    { endDate = endDate ; highestBid = highest ; lastBidder = last } = sto0;
+    drop endDate;
+    un = {};
+    acc = implicit_account last;
+    transfer = transfer_tokens un highest acc;
+    op = ([] : list operation);
+    op = transfer :: op;
+
+    // Save the new storage
+    am = amount;
+    storage = { storage with lastBidder = params ; highestBid = am }
+\end{lstlisting}
 
 \section{The multisig contract}
 \label{appendix:multisigAlbert}
