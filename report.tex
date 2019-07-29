@@ -74,7 +74,7 @@ The Mi-Cho-Coq project consists in a formalisation of Michelson's semantics, wri
 \subsection{Weather insurance}
 \label{contractsSpec}
 
-The first contract we'll prove using Mi-Cho-Coq is the weather insurance contract. Its principle is simple : the contract is originated containing, in its storage the addresses of two other accounts, a treshold of rain, and the public key of a third party oracle. The contract is also originated with a balance. At any point, the oracle can send an integer representing the actual level of rain, as well as its signature. The contract then verifies that the signature is correct, and if it is, compares the level of rain with its treshold : it then sends its whole balance to one of the addresses saved in its storage, depending on the level of rain relative to its treshold.
+The first contract we'll prove using Mi-Cho-Coq is the weather insurance contract. Its principle is simple : the contract is originated containing, in its storage the addresses of two other accounts, a treshold of rain, and the public key of a third party oracle. The contract is also originated with a balance. At any point, the oracle can send an integer representing the actual level of rain, as well as its signature. The contract then verifies that the signature is correct, and if it is, compares the level of rain with its threshold : it then sends its whole balance to one of the addresses saved in its storage, depending on the level of rain relative to its threshold.
 
 
 \begin{lstlisting}[language=michelson]
@@ -97,7 +97,41 @@ code { DUP; DUP;
        PAIR };
 \end{lstlisting}
 
-Let's take a look at our voting program: First, the description of the
+Let's take a closer look at how this contract works. We start by duplication the parameters twice on line \texttt{1}. We then !PACK! the sent rain level and hash it using the !BLAKE2B! instruction on line{2}. We use this encrypted data to check that the sent signature was indeed the one of the weather service on lines \texttt{4-5}; if not, the execution fails.
+
+On lines \texttt{6} to \texttt{8}, we manipulate the stack so has to have the stored contracts after the actual rain quantity and the threshold. We then compare on line \texttt{9} the threshold to the level; if the level is below the threshold, we chose the \texttt{under\_addr}, and if it is above, we choose the \texttt{over\_addr}. We use this address to forge a transaction, sending all the tokens held by the contract on line \texttt{10}. Finally, on line \texttt{11-12}, we construct the return type of the contract (a pair containing the sent operations, i.e. the transfer, and the unchanged storage).\\
+
+Given the description above, we can easily give a specification of the contract. In the followings specifications, I'll note as ``preconditions'' the conditions that must be verified for the contract not to call \lstinline{FAIL} (or a related macro). The ``postconditions'' fully describe the new state of the storage at the end of the execution, as well as the potential generated operations.
+
+{\small
+\begin{longtable}{rl}
+  \textbf{Preconditions}: & \texttt{SignatureCorrect}(weather\_service\_key, received\_sig)\\
+  \textbf{Postconditions}: & new\_storage = storage\\
+  & rain\_tresh $<$ rain\_level $\Rightarrow$ returned\_operations = [transfer\_tokens balance over\_addr]\\
+  & rain\_tresh $\ge$ rain\_level $\Rightarrow$ returned\_operations = [transfer\_tokens balance under\_addr]\\
+\end{longtable}}
+
+Although this is a pretty simple specification that was pretty simple to prove, one point stands out : we only specify the production of the operations at the end of the contract, and not their effect (in this case, that the balance of the contract would be drained after any successful execution). This is because Mi-Cho-Coq only specifies the execution of the contract, and not the interactions with the exterior world.
+
+\subsection{Vote}
+
+Another specified smart-contract is the Vote contract. As its name implies, it allows users to vote for a candidate among a list set at origination. The contracts retains the number of votes towards each candidate. Any user can vote any number of times, but must send 5 tez (or $5000000\mu tez$) with each vote, otherwise the transaction is refused.
+
+\begin{lstlisting}[language=michelson]
+storage (map string int %candidates);
+parameter string %chosen;
+code { AMOUNT; PUSH mutez 5000000; COMPARE; GT;
+       IF { FAIL } {};
+       DUP; DIP { CDR; DUP }; CAR; DUP;
+       DIP {
+             GET; ASSERT_SOME;
+             PUSH int 1; ADD; SOME
+           };
+       UPDATE; NIL operation; PAIR
+     }
+\end{lstlisting}
+
+Let's look in more details at our voting program: First, the description of the
 storage and parameter types is given on lines \texttt{1-2}.  Then the
 code of the contract is given.
 On line \texttt{5}, !AMOUNT! pushes on the stack the amount
@@ -137,36 +171,6 @@ on top of the stack, and pushes the !candidates! map updated
 with the incremented value for !chosen!. Finally, we push an
 empty list of operations with !NIL operation!, and pair the
 two elements on top of the stack to get the correct return type.\\
-
-Given the description above, we can easily give a specification of the contract. In the followings specifications, I'll note as ``preconditions'' the conditions that must be verified for the contract not to call \lstinline{FAIL} (or a related macro). The ``postconditions'' fully describe the new state of the storage at the end of the execution, as well as the potential generated operations.
-
-{\small
-\begin{longtable}{rl}
-  \textbf{Preconditions}: & \texttt{SignatureCorrect}(weather\_service\_key, received\_sig)\\
-  \textbf{Postconditions}: & new\_storage = storage\\
-  & rain\_tresh $<$ rain\_level $\Rightarrow$ returned\_operations = [transfer\_tokens balance over\_addr]\\
-  & rain\_tresh $\ge$ rain\_level $\Rightarrow$ returned\_operations = [transfer\_tokens balance under\_addr]\\
-\end{longtable}}
-
-Although this is a pretty simple specification that was pretty simple to prove, one point stands out : we only specify the production of the operations at the end of the contract, and not their effect (in this case, that the balance of the contract would be drained after any successful execution). This is because Mi-Cho-Coq only specifies the execution of the contract, and not the interactions with the exterior world.
-
-\subsection{Vote}
-
-Another specified smart-contract is the Vote contract. As its name implies, it allows users to vote for a candidate among a list set at origination. The contracts retains the number of votes towards each candidate. Any user can vote any number of times, but must send 5 tez (or $5000000\mu tez$) with each vote, otherwise the transaction is refused.
-
-\begin{lstlisting}[language=michelson]
-storage (map string int %candidates);
-parameter string %chosen;
-code { AMOUNT; PUSH mutez 5000000; COMPARE; GT;
-       IF { FAIL } {};
-       DUP; DIP { CDR; DUP }; CAR; DUP;
-       DIP {
-             GET; ASSERT_SOME;
-             PUSH int 1; ADD; SOME
-           };
-       UPDATE; NIL operation; PAIR
-     }
-\end{lstlisting}
 
 We can then specify this smart-contract as follows (\texttt{amount} refers to the quantity of $\mu tez$ sent by the caller for the transaction):
 {\small
