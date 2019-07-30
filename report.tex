@@ -36,9 +36,8 @@
 
 \vspace*{\fill}
 \begin{center}
-\section*{Thanks}
+\section*{Acknowledgements}
 I'd first like to thank Bruno Bernardo for offering this internship and learning opportunity to me. I also thank him, along with Raphaël Caurdelier and Julien Tesson, both for helping me when I encountered difficulties, and for proofreading this document. Finally, I'd also like to thank the whole Nomadic Labs team for being so welcoming.
-\noindent
 \end{center}
 \vspace*{\fill}
 
@@ -51,7 +50,7 @@ I'd first like to thank Bruno Bernardo for offering this internship and learning
 
 The Tezos ecosystem is centered around the Tezos blockchain. A blockchain is a decentralized database, usually focused on storing data about transactions made by its users. Blockchains usually use a dedicated token, or cryptocurrency, to quantify these transactions. These currencies, while they can't really (yet) be used to buy physical goods outside of the blockchain, can usually be exchanged for traditional government-established currencies, at varying rates. The currency of the Tezos blockchain is called \emph{tez}.
 
-The Tezos blockchain, while currently an outsider compared to older, more successful blockchains (like Bitcoin or Ethereum), has several unique features that make it appealing. Namely, the chain gives token holders governance over the chain, by allowing its core protocol to be amended by votes of the community. Nomadic Labs is one of the most active actors in the Tezos ecosystem, maintaining and improving the Tezos open-source codebase; in particular, they've worked on updates of the protocal, including the Babylone update, which is being voted at time of writing. More details on these features, which won't be discussed in this report, can be found in the Tezos White Paper~\cite{whitePaper}.
+The Tezos blockchain, while currently an outsider compared to older, more successful blockchains (like Bitcoin or Ethereum), has several unique features that make it appealing. Namely, the chain gives token holders governance over the chain, by allowing its core protocol to be amended by votes of the community. Nomadic Labs is one of the most active actors in the Tezos ecosystem, maintaining and improving the Tezos open-source codebase; in particular, they've worked on updates of the protocol, including the Babylone update, which is being voted at time of writing. More details on these features, which won't be discussed in this report, can be found in the Tezos White Paper~\cite{whitePaper}.
 
 More to the point of this work, Tezos puts a strong emphasis on safety : the chain is implemented in OCaml, a statically typed programming language, which prevents some runtime errors. As we will see below, formal verification is also a focus on the work around the chain, and will be the focus of this report.
 
@@ -74,14 +73,14 @@ The Mi-Cho-Coq project consists in a formalisation of Michelson's semantics, wri
 \subsection{Weather insurance}
 \label{contractsSpec}
 
-The first contract we'll prove using Mi-Cho-Coq is the weather insurance contract. Its principle is simple : the contract is originated containing, in its storage the addresses of two other accounts, a treshold of rain, and the public key of a third party oracle. The contract is also originated with a balance. At any point, the oracle can send an integer representing the actual level of rain, as well as its signature. The contract then verifies that the signature is correct, and if it is, compares the level of rain with its threshold : it then sends its whole balance to one of the addresses saved in its storage, depending on the level of rain relative to its threshold.
+The first contract we'll prove using Mi-Cho-Coq is the weather insurance contract. Its principle is simple : the contract is originated containing, in its storage the addresses of two other accounts, a threshold of rain, and the public key of a third party oracle. The contract is also originated with a balance. At any point, the oracle can send an integer representing the actual level of rain, as well as its signature. The contract then verifies that the signature is correct, and if it is, compares the level of rain with its threshold : it then sends its whole balance to one of the addresses saved in its storage, depending on the level of rain relative to its threshold.
 
 
 \begin{lstlisting}[language=michelson]
 parameter (pair (signature %received_sig) (nat :rain %rain_level));
 storage (pair (pair (address %under_addr)
                     (address %over_addr))
-              (pair (nat %rain_tresh) (key %weather_service_key)));
+              (pair (nat %rain_thresh) (key %weather_service_key)));
 code { DUP; DUP;
        CAR; MAP_CDR{PACK ; BLAKE2B};
        SWAP; CDDDR;
@@ -107,11 +106,11 @@ Given the description above, we can easily give a specification of the contract.
 \begin{longtable}{rl}
   \textbf{Preconditions}: & \texttt{SignatureCorrect}(weather\_service\_key, received\_sig)\\
   \textbf{Postconditions}: & new\_storage = storage\\
-  & rain\_tresh $<$ rain\_level $\Rightarrow$ returned\_operations = [transfer\_tokens balance over\_addr]\\
-  & rain\_tresh $\ge$ rain\_level $\Rightarrow$ returned\_operations = [transfer\_tokens balance under\_addr]\\
+  & rain\_thresh $<$ rain\_level $\Rightarrow$ returned\_operations = [transfer\_tokens balance over\_addr]\\
+  & rain\_thresh $\ge$ rain\_level $\Rightarrow$ returned\_operations = [transfer\_tokens balance under\_addr]\\
 \end{longtable}}
 
-Although this is a pretty simple specification that was pretty simple to prove, one point stands out : we only specify the production of the operations at the end of the contract, and not their effect (in this case, that the balance of the contract would be drained after any successful execution). This is because Mi-Cho-Coq only specifies the execution of the contract, and not the interactions with the exterior world.
+Although this is a pretty simple specification that was pretty simple to prove (the proof can be found at \url{https://gitlab.com/Vertmo/mi-cho-coq/blob/more-contract-proofs/src/contracts_coq/testsuite/mini_scenarios/weather_insurance.v}), one point stands out : we only specify the production of the operations at the end of the contract, and not their effect (in this case, that the balance of the contract would be drained after any successful execution). This is because Mi-Cho-Coq only specifies the execution of the contract, and not the interactions with the exterior world.
 
 \subsection{Vote}
 
@@ -287,6 +286,8 @@ def vote :
 \end{lstlisting}
 
 Two difficulties still arise from writing an Albert contract, and create verbosity : first, the need to constantly assign every intermediate value to a variables, and second, the need to explicitly duplicate each resource the program has to use twice. These are unfortunately necessary in order to keep Albert's resource management close to Michelson's stack based management.
+
+More Albert smart-contracts can be found in appendix \ref{appendix:moreAlbert}.
 
 \section{Formal semantics}
 \label{albertSemantics}
@@ -808,6 +809,7 @@ On a personal note, these works allowed to discover many interesting concept rel
 \appendix
 
 \chapter{More Albert contracts}
+\label{appendix:moreAlbert}
 
 \section{Auction}
 
@@ -855,7 +857,7 @@ def bid : { params : parameter_ty ; storage : storage_ty } ->
 \section{The multisig contract}
 \label{appendix:multisigAlbert}
 
-The multisig (multi-signature) smart-contract allows for a way of access control : the contract is originated with a list of authorized public keys, and a threshold. To issue a command to the multi-sig, the user must send more signature than the treshold specifies. If the user does not send enough signature, or if at least one of the signature is incorrect, the execution stops. Moreover, the contract also uses a counter that increases at each successful execution to avoid replay attacks (where an opponent would intercept the transaction and send it a second time). While multisigs can be written with intricate payloads in mind (up to and including starting the execution of another contract) the one below is quite simple : either it is asked to transfer a sum from it's balance to another contract, to change it's delegate or to change it's access-control parameters (set of key and treshold).
+The multisig (multi-signature) smart-contract allows for a way of access control : the contract is originated with a list of authorized public keys, and a threshold. To issue a command to the multisig, the user must send more signature than the threshold specifies. If the user does not send enough signature, or if at least one of the signature is incorrect, the execution stops. Moreover, the contract also uses a counter that increases at each successful execution to avoid replay attacks (where an opponent would intercept the transaction and send it a second time). While multisigs can be written with intricate payloads in mind (up to and including starting the execution of another contract) the one below is quite simple : either it is asked to transfer a sum from it's balance to another contract, to change it's delegate or to change it's access-control parameters (set of key and threshold).
 
 \begin{lstlisting}[language=Albert]
 type parameter_ty = { payload :
