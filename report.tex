@@ -52,17 +52,17 @@ The Tezos ecosystem is centered around the Tezos blockchain. A blockchain is a d
 
 The Tezos blockchain, while currently an outsider compared to older, more successful blockchains (like Bitcoin or Ethereum), has several unique features that make it appealing. Namely, the chain gives token holders governance over the chain, by allowing its core protocol to be amended by votes of the community. Nomadic Labs is one of the most active actors in the Tezos ecosystem, maintaining and improving the Tezos open-source codebase; in particular, they've worked on updates of the protocol, including the Babylone update, which is being voted at time of writing. More details on these features, which won't be discussed in this report, can be found in the Tezos White Paper~\cite{whitePaper}.
 
-More to the point of this work, Tezos puts a strong emphasis on safety : the chain is implemented in OCaml, a statically typed programming language, which prevents some runtime errors. As we will see below, formal verification is also a focus on the work around the chain, and will be the focus of this report.
+More to the point of this work, Tezos puts a strong emphasis on safety: the chain is implemented in OCaml, a statically typed programming language, which prevents some runtime errors. As we will see below, formal verification is also a focus on the work around the chain, and will be the focus of this report.
 
 \section{The Michelson programming language}
 
 Tezos, as well as allowing regular ``humans'' to create accounts (referred to as tz1 accounts), also allows users to run programs on the blockchain. These programs are often called ``smart contracts'', since most of them are used to automate transactions between two parties. Once the contract has been uploaded (originated) on the blockchain, it can then be called by any other account (being a human user or another smart-contract) by sending a transaction, containing at least a small amount of tez to cover processing fees, as well as the parameters of the contract. The contract itself holds a balance and can use its tokens to forge its own transactions.
 
-The programming language used to write smart contracts for Tezos is called Michelson~\cite{michelsonwhitedoc}. Michelson is a statically typed stack-based programming language, meaning that the programmer has to explicitly manipulate the typed stack of the interpreter, using low level instructions. Examples of Michelson contracts (and there specification) are given in section \ref{contractsSpec}
+The programming language used to write smart contracts for Tezos is called Michelson~\cite{michelsonwhitedoc}. Michelson is a statically typed stack-based programming language, meaning that the programmer has to explicitly manipulate the typed stack of the interpreter, using low level instructions. Examples of Michelson contracts (and their specification) are given in section \ref{contractsSpec}
 
 As Michelson is a low level language, it can be very tedious to write: to manipulate the stack explicitly, the programmer needs to keep in mind the state of the stack at every point in the program (fortunately an Emacs michelson-mode exists to display such information). The language was purposefully designed to be simple, which makes it easy to specify and proof specifications of programs, as we'll see below. However, it also makes writing smart-contracts in Michelson a bit tedious, and creates a barrier to entry for new programmers wanting to work in the Tezos ecosystem.
 
-Since the Michelson interpreter is already part of the Tezos protocol (and can only be changed by amendment and vote of the community), it's a good base to build upon : creating higher-level programming languages that would compile to Michelson would facilitate the writing of smart-contracts. To accomplish this goal, a first step will be to establish an intermediate programming language, Albert, abstracting away some of the low-level hurdles of Michelson (the stack manipulations in particular). To keep formal verification in mind, the Albert language semantics will be specified, and the compiler proved correct.
+Since the Michelson interpreter is already part of the Tezos protocol (and can only be changed by amendment and vote of the community), it's a good base to build upon: creating higher-level programming languages that would compile to Michelson would facilitate the writing of smart-contracts. To accomplish this goal, a first step will be to establish an intermediate programming language, Albert, abstracting away some of the low-level hurdles of Michelson (the stack manipulations in particular). To keep formal verification in mind, the Albert language semantics will be specified, and the compiler proved correct.
 
 \chapter{The Mi-Cho-Coq framework}
 
@@ -73,7 +73,7 @@ The Mi-Cho-Coq project consists in a formalisation of Michelson's semantics, wri
 \subsection{Weather insurance}
 \label{contractsSpec}
 
-The first contract we'll prove using Mi-Cho-Coq is the weather insurance contract. Its principle is simple : the contract is originated containing, in its storage the addresses of two other accounts, a threshold of rain, and the public key of a third party oracle. The contract is also originated with a balance. At any point, the oracle can send an integer representing the actual level of rain, as well as its signature. The contract then verifies that the signature is correct, and if it is, compares the level of rain with its threshold : it then sends its whole balance to one of the addresses saved in its storage, depending on the level of rain relative to its threshold.
+The first contract we'll prove using Mi-Cho-Coq is the weather insurance contract. Its principle is simple: the contract is originated containing, in its storage the addresses of two other accounts, a threshold of rain, and the public key of a third party oracle. The contract is also originated with a balance. At any point, the oracle can send an integer representing the actual level of rain, as well as its signature. The contract then verifies that the signature is correct, and if it is, compares the level of rain with its threshold: it then sends its whole balance to one of the addresses saved in its storage, depending on the level of rain relative to its threshold.
 
 
 \begin{lstlisting}[language=michelson]
@@ -110,7 +110,7 @@ Given the description above, we can easily give a specification of the contract.
   & rain\_thresh $\ge$ rain\_level $\Rightarrow$ returned\_operations = [transfer\_tokens balance under\_addr]\\
 \end{longtable}}
 
-Although this is a pretty simple specification that was pretty simple to prove (the proof can be found at \url{https://gitlab.com/Vertmo/mi-cho-coq/blob/more-contract-proofs/src/contracts_coq/testsuite/mini_scenarios/weather_insurance.v}), one point stands out : we only specify the production of the operations at the end of the contract, and not their effect (in this case, that the balance of the contract would be drained after any successful execution). This is because Mi-Cho-Coq only specifies the execution of the contract, and not the interactions with the exterior world.
+Although this is a pretty simple specification that was pretty simple to prove (the proof can be found at \url{https://gitlab.com/Vertmo/mi-cho-coq/blob/more-contract-proofs/src/contracts_coq/testsuite/mini_scenarios/weather_insurance.v}), one point stands out: we only specify the production of the operations at the end of the contract, and not their effect (in this case, that the balance of the contract would be drained after any successful execution). This is because Mi-Cho-Coq only specifies the execution of the contract, and not the interactions with the exterior world.
 
 \subsection{Vote}
 
@@ -195,9 +195,9 @@ Michocott is an implementation of Mi-Cho-Coq, using the Ott~\cite{ottLang} progr
 In order to adapt Ott to Michelson's needs, and especially the format of its online documentation (\url{http://tezos.gitlab.io/mainnet/whitedoc/michelson.html}), which uses the ReStructuredText (reST) format, I added a reST output mode to Ott. Given the architecture of the Ott compiler, which separates frontend from backend pretty well, it was fairly easy to add a new RST backend.\\
 To make the output practical for integrating pieces of the documentation with human-written text, I also added a mode allowing to generate one \textit{.rst} file per typing/semantic rule. The fragments can then be integrated into a single documentation page using the reST \texttt{.. include::} directive.\\
 
-Another goal of automated document generation is to check that the typing and semantic rules specified in Michocott (and Mi-Cho-Coq) are indeed the same as the ones actually implemented in the Michelson interpreter running in the chain. In order to easily compare the two, we need a structured output which can be automatically generated from both Michocott and the interpreter. Luckily for us, on the interpreter side, we already have the start of a solution : Alexandre Doussot developped, for his own tool (try-michelson \url{https://gitlab.com/nomadic-labs/try-michelson}) a tool capable to parse the Michelson documentation (which, while not being automatically generated from the interpreter code, is kept updated and in check by the Tezos developers).
+Another goal of automated document generation is to check that the typing and semantic rules specified in Michocott (and Mi-Cho-Coq) are indeed the same as the ones actually implemented in the Michelson interpreter running in the chain. In order to easily compare the two, we need a structured output which can be automatically generated from both Michocott and the interpreter. Luckily for us, on the interpreter side, we already have the start of a solution: Alexandre Doussot developped, for his own tool (try-michelson \url{https://gitlab.com/nomadic-labs/try-michelson}) a tool capable to parse the Michelson documentation (which, while not being automatically generated from the interpreter code, is kept updated and in check by the Tezos developers).
 
-In order to complete the chain between the interpreter and Michocott, I added a JSON output to Ott. An example of the JSON output is as follows :
+In order to complete the chain between the interpreter and Michocott, I added a JSON output to Ott. An example of the JSON output is as follows:
 \begin{verbatim}
     {"op":"CDR",
       "ty":[{
@@ -214,12 +214,12 @@ The implementation of the output is unfortunately, highly specific to Michelson'
 
 \subsection{Parser and lexer improvements}
 \label{parserLexerImprov}
-In addition to its specification and documentation capabilities, Ott can also, using the grammar rules defined for a language, generate both an Ocamllex lexer and a Menhir parser (only for OCaml, but a port to use the Coq version of Menhir should be doable with minimal modifications). These functionalities however are still, in the main branch of Ott, a bit lackluster, and I proposed the following changes to fix some of the issues I encountered while using the lexer generation (these changes can be seen in this GitHub PR : \url{https://github.com/ott-lang/ott/pull/52})
+In addition to its specification and documentation capabilities, Ott can also, using the grammar rules defined for a language, generate both an Ocamllex lexer and a Menhir parser (only for OCaml, but a port to use the Coq version of Menhir should be doable with minimal modifications). These functionalities however are still, in the main branch of Ott, a bit lackluster, and I proposed the following changes to fix some of the issues I encountered while using the lexer generation (these changes can be seen in this GitHub PR: \url{https://github.com/ott-lang/ott/pull/52})
 
 \begin{itemize}
-\item Order of the tokens : In order for the tokens to be correctly lexed, a token prefixing another must be placed after the longer token in the \textit{.mll} file : this is because OCamllex always select the first matching token it encounters, and therefore would always select the prefix if it was first in the list. Fortunately, it's sufficient to sort the tokens by decreasing length to solve this problem. More difficult is the problem of regular expressions that can be included in one another. I decided to simply place the metavars (which are most likely to use regex) at the end of the list; a better method could surely be implemented to construct topological sort of regex, but this would really complicate the program and the running time of Ott, for really small benefits.
-\item Type conversion : Regarding the metavars, some of them are often used to define a token containing a value of a type different than string (typically, to parse integer or floats). The lexer generation didn't account for this, so I added a feature to automatically add a \texttt{string\_of\_XXX} conversion to the token lexing. The features get the relevant type from the metavar declaration in the Ott source file. As of this PR, I've only added the conversions \texttt{string\_of\_int}, \texttt{string\_of\_bool} and \texttt{string\_of\_float}, but it could be interesting to allow users to define and use their own arbitrary conversion function (however, that would require some heavier modification of the code, and most likely be a really niche feature)
-\item Location : Finally, I completed the calculations of lexer locations, which didn't update when uncountering a new line (``\textbackslash n'' character), because the call to \texttt{Lexing.new\_line lexbuf} was missing. This is a tiny change, but it allows for parsing error message to be correct and helpful.
+\item Order of the tokens: In order for the tokens to be correctly lexed, a token prefixing another must be placed after the longer token in the \textit{.mll} file: this is because OCamllex always select the first matching token it encounters, and therefore would always select the prefix if it was first in the list. Fortunately, it's sufficient to sort the tokens by decreasing length to solve this problem. More difficult is the problem of regular expressions that can be included in one another. I decided to simply place the metavars (which are most likely to use regex) at the end of the list; a better method could surely be implemented to construct topological sort of regex, but this would really complicate the program and the running time of Ott, for really small benefits.
+\item Type conversion: Regarding the metavars, some of them are often used to define a token containing a value of a type different than string (typically, to parse integer or floats). The lexer generation didn't account for this, so I added a feature to automatically add a \texttt{string\_of\_XXX} conversion to the token lexing. The features get the relevant type from the metavar declaration in the Ott source file. As of this PR, I've only added the conversions \texttt{string\_of\_int}, \texttt{string\_of\_bool} and \texttt{string\_of\_float}, but it could be interesting to allow users to define and use their own arbitrary conversion function (however, that would require some heavier modification of the code, and most likely be a really niche feature)
+\item Location: Finally, I completed the calculations of lexer locations, which didn't update when uncountering a new line (``\textbackslash n'' character), because the call to \texttt{Lexing.new\_line lexbuf} was missing. This is a tiny change, but it allows for parsing error message to be correct and helpful.
 \end{itemize}
 
 \chapter{The Albert Programming Language}
@@ -248,7 +248,7 @@ $$
 
 \subsection{Types}
 
-In order to fully use the possibilities of Michelson, Albert implements all the basic types implemented by Michelson, that is : ?int?, ?nat?, ?mutez?, ?timestamp? for numeric types, ?string? and ?bytes?. Albert also implements the same data structures as Michelson, ?list?, ?set? and ?map?.
+In order to fully use the possibilities of Michelson, Albert implements all the basic types implemented by Michelson, that is: ?int?, ?nat?, ?mutez?, ?timestamp? for numeric types, ?string? and ?bytes?. Albert also implements the same data structures as Michelson, ?list?, ?set? and ?map?.
 
 Moreover, Albert generalizes !pair! types with ?record?, and ?or?, ?option? and ?bool? by n-ary ?variant? with arbitrary constructors. For ease of use, Albert also adds these specific types to its core language, making them equivalent to the similar record type (for instance, ?option ty? is equivalent to the variant ?[None : unit | Some : ty]?).
 
@@ -285,7 +285,7 @@ def vote :
     end
 \end{lstlisting}
 
-Two difficulties still arise from writing an Albert contract, and create verbosity : first, the need to constantly assign every intermediate value to a variables, and second, the need to explicitly duplicate each resource the program has to use twice. These are unfortunately necessary in order to keep Albert's resource management close to Michelson's stack based management.
+Two difficulties still arise from writing an Albert contract, and create verbosity: first, the need to constantly assign every intermediate value to a variables, and second, the need to explicitly duplicate each resource the program has to use twice. These are unfortunately necessary in order to keep Albert's resource management close to Michelson's stack based management.
 
 More Albert smart-contracts can be found in appendix \ref{appendix:moreAlbert}.
 
@@ -386,7 +386,7 @@ $$
     { E \vdash_{rhs} (x_1\:/mod\:x_2) / \{ x_1 = nv_1 ; x_2 = nv_2 \} \rightarrow \{ quotient = nv_1 / nv_2 ; remainder = nv_1 \% nv_2 \} }
 $$
 
-Apart from assignments, the instruction language is also completed with a few specific instructions : for instance, the \lstinline{drop} instruction, which behave similarly to the !DROP! instruction in Michelson. It's a bit less useful in Albert however, as useless variable existing in the main record is not an annoyance for the programmer, who can simply ignore it.
+Apart from assignments, the instruction language is also completed with a few specific instructions: for instance, the \lstinline{drop} instruction, which behave similarly to the !DROP! instruction in Michelson. It's a bit less useful in Albert however, as useless variable existing in the main record is not an annoyance for the programmer, who can simply ignore it.
 
 $$
 \inferrule* [left=(rhs\_update)]
@@ -439,7 +439,7 @@ again, with similar properties defined on the other terms of our language. The p
 
 \subsubsection{Variants}
 
-As we've seen above, Albert's \texttt{variant} types generalize the \texttt{or}, \texttt{option} and \texttt{bool} types. Variants are therefore the dual of records, with the caveat that it is not possible to construct an empty variant (by choice, as Michelson does not have an empty type it could correspond to). Variants offer two main operations to the user : constructing a \texttt{variant} value using a constructor, and pattern-matching on a \texttt{variant} value.
+As we've seen above, Albert's \texttt{variant} types generalize the \texttt{or}, \texttt{option} and \texttt{bool} types. Variants are therefore the dual of records, with the caveat that it is not possible to construct an empty variant (by choice, as Michelson does not have an empty type it could correspond to). Variants offer two main operations to the user: constructing a \texttt{variant} value using a constructor, and pattern-matching on a \texttt{variant} value.
 
 Constructor are determined by a label, and applied (as a function) on a single value. When constructing a \texttt{variant} value, the user must indicate the full type of the variant value (meaning, all the different constructors and their types). This choice was made in order to simplify the work of the type-checker of Albert (since Albert is an intermediate language designed to be compiled for, and not for programs to be manually written for, this should not be too much of an issue for future users). Below is the typing rule for \texttt{variant} value and constructor application, as well as the related semantic rule.
 
@@ -621,15 +621,15 @@ As we want to specify and prove the correctness of our compiler, we decided to i
 
 Albert's parser and lexer are the only part not implemented in Coq. Indeed, we use Ott functionalities (improved with the modifications outlined in \ref{parserLexerImprov}) to generate both a Menhir parser as well as an Ocamllex lexer for the language. As Ott does not yet support generating Menhir-Coq parser, we've decided to have the generated parser directly in OCaml. We therefore must call the parser's API from the OCaml extracted code (or rather, from a ``main'' function written by hand to tie all the code together) instead of directly from Coq code. Although this does work well, we still need to adapt the code of the parser a little to fix discrepancies between the OCaml code generated by Menhir and the OCaml code extracted from Coq.
 
-The main difference lies in the name of constructors for the AST generated by Ott : while Coq's extraction adds a \texttt{Coq\_} prefix in front of the constructor, Ott does not when producing the \textit{parser.mly} file used by Menhir to generate the parser. Our (admittedly dirty) fix is to rewrite part of the \textit{parser.mly} file with appropriate regular expressions. While this may seems like a bad idea for certified compiler, we have deemed reasonable not to certify the parser for Albert (as more high-level language compiling to Albert will directly compile to the its AST anyway, and therefore sidestep any weakness in the parser).
+The main difference lies in the name of constructors for the AST generated by Ott: while Coq's extraction adds a \texttt{Coq\_} prefix in front of the constructor, Ott does not when producing the \textit{parser.mly} file used by Menhir to generate the parser. Our (admittedly dirty) fix is to rewrite part of the \textit{parser.mly} file with appropriate regular expressions. While this may seems like a bad idea for certified compiler, we have deemed reasonable not to certify the parser for Albert (as more high-level language compiling to Albert will directly compile to the its AST anyway, and therefore sidestep any weakness in the parser).
 
 \paragraph{Middle-end}
 
 In order to compile Albert's AST to Mi-Cho-Coq's AST, a first necessary phase is to type-check the Albert program, in order both to make sure the Michelson program will also be well-typed, and to infer the explicit types needed to convert Albert's values to Michelson's values (see \ref{alberteqmichelson}). We therefore implemented the typing-rules of Albert, described in Ott as relations, in functional form.\\
 
-The type checker processes in three separate passes : the first one consists in getting rid of type aliases declared by the user, and replacing them by their actual declaration. This simplify the next phases, as we don't have to worry about declared types when verifying type-equivalence during the type-checking proper. As declared types are simple aliases (types can't be recursively declared), these phases amount to (recursive) inlining of the type aliases wherever they're found in the program. This phase can fail (and therefore returns in the error monad) if an undeclared type alias is found in the program.
+The type checker processes in three separate passes: the first one consists in getting rid of type aliases declared by the user, and replacing them by their actual declaration. This simplify the next phases, as we don't have to worry about declared types when verifying type-equivalence during the type-checking proper. As declared types are simple aliases (types can't be recursively declared), these phases amount to (recursive) inlining of the type aliases wherever they're found in the program. This phase can fail (and therefore returns in the error monad) if an undeclared type alias is found in the program.
 
-The second phase, is equally simple, and cannot even fail : it consists in sorting by lexicographic order both the fields of records and the constructors of variants in type declaration. This pass allows the user to write the fields of records in any order, while guarantying that the type-checker doesn't have to verify that two lists are permutations of each other. The sorting proper uses the Merge Sort algorithm, as implemented in Coq's \textbf{Sorting} library, and is therefore fairly efficient (which could end up mattering if higher-level compiler targeting Albert end up producing large records or variants to represent more complex data-structures or types).\\
+The second phase, is equally simple, and cannot even fail: it consists in sorting by lexicographic order both the fields of records and the constructors of variants in type declaration. This pass allows the user to write the fields of records in any order, while guarantying that the type-checker doesn't have to verify that two lists are permutations of each other. The sorting proper uses the Merge Sort algorithm, as implemented in Coq's \textbf{Sorting} library, and is therefore fairly efficient (which could end up mattering if higher-level compiler targeting Albert end up producing large records or variants to represent more complex data-structures or types).\\
 
 The third, most complex and most important phase is of course the type-checking. Currently, the type-checking is entirely ``unidirectional'', as it starts at the top of the program, and simply checks program from top to bottom. This means that the type-checker is actually pretty stupid, as it does not perform any type inference. Since our type-system is monomorphic, this is not too much of a limitation, although we had to add some explicit type annotations in order for the type-checker to fully cover all cases (for instance, an empty list type cannot be inferred, so it needs to be annotated).
 
@@ -639,7 +639,7 @@ The type-checker is supposed to be correct and complete relative to the typing-r
 
 \paragraph{Backend}
 
-Once the program has been successfully type-checked, we move on to Michelson code generation. As we've specified, our compiler targets Michelson's untyped syntax, which will take care of the pretty-printing of the program; therefore, we only have to worry about producing a Mi-Cho-Coq untyped AST. As with the type-checker, the compiler returns its result in an error monad, although the compiler should not fail if the program is well typed (this is a property to be proven). We also want to have other properties of the compiler : namely, that it preserves typing (relative to the Albert-Michelson type equivalence described in \ref{alberteqmichelson}) and semantics. As of now, the first property has only been partially proven, and I haven't had time to tackle the second one.
+Once the program has been successfully type-checked, we move on to Michelson code generation. As we've specified, our compiler targets Michelson's untyped syntax, which will take care of the pretty-printing of the program; therefore, we only have to worry about producing a Mi-Cho-Coq untyped AST. As with the type-checker, the compiler returns its result in an error monad, although the compiler should not fail if the program is well typed (this is a property to be proven). We also want to have other properties of the compiler: namely, that it preserves typing (relative to the Albert-Michelson type equivalence described in \ref{alberteqmichelson}) and semantics. As of now, the first property has only been partially proven, and I haven't had time to tackle the second one.
 
 We'll focus in the following sections on the specifics of compiling an Albert program to Michelson, instruction by instruction.
 
@@ -673,7 +673,7 @@ We'll begin with the right-hand sides, which, has we've seen, contain most of th
 
 First off, arguments are usually pretty easy to compile, as they consist mostly in either values, variable calls or record construction (the latter being more complex).\\
 
-Values are also easy to compile by in pushing Michelson's data onto the stack. However, we have to take into account a small specific case : some types can't actually be used with !PUSH! in Michelson, as they are not storable. Currently, the main type concerned by this limitation is !operation!; since we need to build a !list operation! at the end of our program, in order for it to have a correct Michelson's contract return type, we need to add a specific case to take care of that issue. We simply decide to produce !NIL operation! in that case, instead of a !PUSH!.
+Values are also easy to compile by in pushing Michelson's data onto the stack. However, we have to take into account a small specific case: some types can't actually be used with !PUSH! in Michelson, as they are not storable. Currently, the main type concerned by this limitation is !operation!; since we need to build a !list operation! at the end of our program, in order for it to have a correct Michelson's contract return type, we need to add a specific case to take care of that issue. We simply decide to produce !NIL operation! in that case, instead of a !PUSH!.
 
 {\small
 \begin{longtable}{l|l}
@@ -724,7 +724,7 @@ Right-hand sides also allow for some simple record manipulation, namely taking a
   $var.l_i$ & !CDR ; ! \ldots ! ; CAR! \\
   \hline
   \{ var with $l_{i_1}$ = $x_1$ ; \ldots ; $l_{i_j}$ = $x_j$ \} & !UNPAIR ; ! \newline
-  if the current label is to be updated : !DROP ; DIG! $(stack\#x_k)$ \newline
+  if the current label is to be updated: !DROP ; DIG! $(stack\#x_k)$ \newline
   !DIP {! \ldots !} ; PAIR ; !
 \end{longtable}
 }
@@ -857,7 +857,7 @@ def bid : { params : parameter_ty ; storage : storage_ty } ->
 \section{The multisig contract}
 \label{appendix:multisigAlbert}
 
-The multisig (multi-signature) smart-contract allows for a way of access control : the contract is originated with a list of authorized public keys, and a threshold. To issue a command to the multisig, the user must send more signature than the threshold specifies. If the user does not send enough signature, or if at least one of the signature is incorrect, the execution stops. Moreover, the contract also uses a counter that increases at each successful execution to avoid replay attacks (where an opponent would intercept the transaction and send it a second time). While multisigs can be written with intricate payloads in mind (up to and including starting the execution of another contract) the one below is quite simple : either it is asked to transfer a sum from it's balance to another contract, to change it's delegate or to change it's access-control parameters (set of key and threshold).
+The multisig (multi-signature) smart-contract allows for a way of access control: the contract is originated with a list of authorized public keys, and a threshold. To issue a command to the multisig, the user must send more signature than the threshold specifies. If the user does not send enough signature, or if at least one of the signature is incorrect, the execution stops. Moreover, the contract also uses a counter that increases at each successful execution to avoid replay attacks (where an opponent would intercept the transaction and send it a second time). While multisigs can be written with intricate payloads in mind (up to and including starting the execution of another contract) the one below is quite simple: either it is asked to transfer a sum from it's balance to another contract, to change it's delegate or to change it's access-control parameters (set of key and threshold).
 
 \begin{lstlisting}[language=Albert]
 type parameter_ty = { payload :
