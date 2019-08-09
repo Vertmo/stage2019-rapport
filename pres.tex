@@ -1,0 +1,116 @@
+\documentclass[aspectratio=169]{beamer}
+\usetheme[progressbar=frametitle]{metropolis}
+
+\usepackage{listings}
+\usepackage{graphicx}
+
+\input{albertlang}
+\input{michelsonlang}
+
+\title{Compiling a low-level language to Michelson}
+\author{Basile Pesin, under the supervision of Bruno Bernardo, Raphaël Caurderlier, and Julien Tesson}
+\institute{Nomadic Labs}
+
+\begin{document}
+
+\maketitle
+
+\section{Context, and the Michelson programming language}
+
+\begin{frame}{The Tezos Blockchain}
+  A \textbf{blockchain} (distributed transaction ledger) with...
+
+  \textbf{Self-amending protocol} : Token holders vote for updates
+
+  \textbf{Focus on safety} :
+  \begin{itemize}
+    \item Strongly typed OCaml implementation
+    \item Formally verifiable smart-contract language
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{The Michelson language}
+  \begin{itemize}
+    \item Stack manipulations : !PUSH ty lit!, !DROP!, !SWAP!, !DUP!, !DIP { ins }! 
+    \item Numeric types: !int!, !nat!, !mutez!, !timestamp! and ops: !ADD!, !COMPARE! \ldots
+    \item Booleans, control structures: !IF { then } { else }!, !LOOP { body }!
+    \item Pairs: !CAR!, !CDR!, !PAIR! \ldots
+    \item Or: !LEFT ty!, !RIGHT ty!, !IF_LEFT!, !LOOP_LEFT!
+    \item List, Set: !NIL ty!, !CONS!, !IF_CONS { then } { else }!, !ITER { body }! \ldots
+    \item Map: !EMPTY_MAP tyk tyv!, !UPDATE!, !MEM!, !GET! \ldots
+    \item Domain specific operations
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{A short Michelson program}
+The \textbf{voting} smart contract, a classic
+{\footnotesize
+\begin{lstlisting}[language=michelson]
+storage (map string int %candidates);
+parameter string %chosen;
+code { AMOUNT; PUSH mutez 5000000; COMPARE; GT;
+       IF { FAIL } {};
+       DUP; DIP { CDR; DUP }; CAR; DUP;
+       DIP {
+             GET; ASSERT_SOME;
+             PUSH int 1; ADD; SOME
+           };
+       UPDATE; NIL operation; PAIR
+     }
+\end{lstlisting}}
+\end{frame}
+
+\begin{frame}{Representations of Michelson}
+  \begin{itemize}
+    \item In-chain interpreter (in the protocol)
+    \item Official Documentation (\url{http://tezos.gitlab.io/})
+    \item MiChoCoq typed syntax\\
+      $\mspace{90mu}\upharpoonleft \downharpoonright$ \\
+      MiChoCoq untyped syntax \\
+      $\mspace{90mu}\upharpoonleft \downharpoonright$ \\
+      Micheline (S-expressions)
+    \item MiChoCott
+  \end{itemize}
+\end{frame}
+
+\section{The Albert Programming language}
+
+\begin{frame}[fragile]{The voting contract, in Albert}
+\begin{lstlisting}[language=albert,basicstyle=\footnotesize]
+type storage_ty = { threshold : mutez; votes: map string nat }
+def vote :
+   { store : storage_ty ; param : string } ->
+   { operations : list operation ; out_storage : storage_ty } =
+    { car = store0; cdr = store1 } = dup store;
+    threshold = store1.threshold; { car = threshold; cdr = threshold_copy } = dup threshold;
+    ok = amount < threshold;
+    match ok with
+       True -> state = store0.votes ;
+               { car = state0; cdr = state1 } = dup state; { car = param0; cdr = param1 } = dup param;
+               prevote_option = state1[param1]; prevote = assert_some prevote_option;
+               one = 1; postvote = prevote + one; postvote = Some postvote;
+               final_state = {| state0 with param0 |-> postvote |};
+               out_storage = { votes = final_state; threshold = threshold_copy };
+               operations = []
+     | False -> failwith "you're so cheap!"
+    end
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}{Linear typing}
+\end{frame}
+
+\section{Albert's compiler to Michelson}
+
+\begin{frame}{Compiler target}
+  MiChoCoq typed syntax $\rightarrow$ Verify equivalence of typing and semantics \\
+  $\mspace{90mu} \uparrow $ \\
+  \textbf{MiChoCoq untyped syntax} \\
+  $\mspace{90mu} \downarrow $ \\
+  Micheline (S-expressions) $\rightarrow$ Pretty print to a \textit{.tz} file
+\end{frame}
+
+\begin{frame}{Compiler architecture}
+\end{frame}
+
+\end{document}
