@@ -261,27 +261,29 @@ Below is the classic vote smart-contract, rewritten in Albert. It's notable that
 type storage_ty = { threshold : mutez; votes: map string nat }
 
 def vote :
-   { store : storage_ty ; param : string } ->
-   { operations : list operation ; out_storage : storage_ty } =
+  { param : string ; store : storage_ty } ->
+  { operations : list operation ; out_storage : storage_ty } =
 
-    { car = store0; cdr = store1 } = dup store;
+    (store0, store1) = dup store;
     threshold = store1.threshold;
-    { car = threshold; cdr = threshold_copy } = dup threshold;
-    ok = amount < threshold;
+    (threshold, threshold_copy) = dup threshold;
+    am = amount;
+    ok = am >= threshold;
     match ok with
-       True -> state = store0.votes ;
-               { car = state0; cdr = state1 } = dup state;
-               { car = param0; cdr = param1 } = dup param;
-               prevote_option = state1[param1];
-               prevote = assert_some prevote_option;
-               one = 1;
-               postvote = prevote + one;
-               postvote = Some postvote;
-               final_state = {| state0 with param0 |-> postvote |};
-               out_storage = { votes = final_state; threshold = threshold_copy };
-               operations = []
-     | False ->
-               failwith "you're so cheap!"
+      False f ->
+             failwith "you are so cheap!"
+      | True t -> drop t;
+             state = store0.votes ;
+             (state0, state1) = dup state;
+             (param0, param1) = dup param;
+             prevote_option = state1[param1];
+             { res = prevote } = assert_some { opt = prevote_option };
+             one = 1;
+             postvote = prevote + one;
+             postvote = (Some : [ None : unit | Some : nat ]) postvote;
+             final_state =  {| state0 with param0 |-> postvote |};
+             out_storage = {threshold = threshold_copy; votes = final_state};
+             operations = ([] : list operation)
     end
 \end{lstlisting}
 

@@ -79,25 +79,37 @@ code { AMOUNT; PUSH mutez 5000000; COMPARE; GT;
 \begin{lstlisting}[language=albert,basicstyle=\footnotesize]
 type storage_ty = { threshold : mutez; votes: map string nat }
 def vote :
-   { store : storage_ty ; param : string } ->
-   { operations : list operation ; out_storage : storage_ty } =
-    { car = store0; cdr = store1 } = dup store;
-    threshold = store1.threshold; { car = threshold; cdr = threshold_copy } = dup threshold;
-    ok = amount < threshold;
+  { param : string ; store : storage_ty } ->
+  { operations : list operation ; out_storage : storage_ty } =
+    (store0, store1) = dup store; threshold = store1.threshold; (threshold, threshold_copy) = dup threshold;
+    am = amount; ok = am >= threshold;
     match ok with
-       True -> state = store0.votes ;
-               { car = state0; cdr = state1 } = dup state; { car = param0; cdr = param1 } = dup param;
-               prevote_option = state1[param1]; prevote = assert_some prevote_option;
-               one = 1; postvote = prevote + one; postvote = Some postvote;
-               final_state = {| state0 with param0 |-> postvote |};
-               out_storage = { votes = final_state; threshold = threshold_copy };
-               operations = []
-     | False -> failwith "you're so cheap!"
+      False f -> failwith "you are so cheap!"
+      | True t -> drop t; state = store0.votes ;
+             (state0, state1) = dup state; (param0, param1) = dup param;
+             prevote_option = state1[param1];
+             { res = prevote } = assert_some { opt = prevote_option };
+             one = 1; postvote = prevote + one; postvote = Some postvote;
+             final_state =  {| state0 with param0 |-> postvote |};
+             out_storage = {threshold = threshold_copy; votes = final_state};
+             operations = ([] : list operation)
     end
 \end{lstlisting}
 \end{frame}
 
 \begin{frame}{Linear typing}
+  Values are consumed: $G \vdash y = x : \{ x : t \} \Rightarrow \{ y : t \} $
+
+  Explicit duplication: $G \vdash y = dup\:x : \{ x : t \} \Rightarrow \{ y : (t \times t) \}$\\
+  with left-hand side destructuring: $G \vdash (y, z) = dup\:x : \{ x : t \} \Rightarrow \{ y : t; z : t \}$\\
+  Explicit destruction: $G \vdash drop\:x : \{ x : t \} \Rightarrow \{\}$
+
+  Other examples:\\
+  $G \vdash z = x + y : \{ x : int ; y : int \} \Rightarrow \{ z : int \}$\\
+  $G \vdash n = size\:s : \{ s : string \} \Rightarrow \{ n : nat \}$
+\end{frame}
+
+\begin{frame}{More typing}
 \end{frame}
 
 \section{Albert's compiler to Michelson}
@@ -110,7 +122,33 @@ def vote :
   Micheline (S-expressions) $\rightarrow$ Pretty print to a \textit{.tz} file
 \end{frame}
 
+\begin{frame}{Compiler structure}
+\end{frame}
+
 \begin{frame}{Compiler architecture}
+\end{frame}
+
+\begin{frame}{Stack manipulations}
+\end{frame} 
+
+\section{Conclusion}
+
+\begin{frame}{Accomplished work}
+  \begin{itemize}
+  \item Additions to MiChoCoq (DIG and DUG instructions, Micheline pretty-printer)
+  \item Some improvements on Ott (in particular on the lexer and parser generators)
+  \item Formal semantics of Albert in Ott
+  \item Type-checker + compiler for almost all Albert (missing sets and some domain specific operations)
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Future works}
+  \begin{itemize}
+  \item Proving type-checker and compiler properties
+  \item Better error messages (locations)
+  \item Optimization of stack manipulations
+  \item And of course, writing compilers to Albert
+  \end{itemize}
 \end{frame}
 
 \end{document}
