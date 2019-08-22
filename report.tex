@@ -74,23 +74,27 @@ The Mi-Cho-Coq project consists in a formalization of Michelson's semantics, wri
 
 The first contract we'll prove using Mi-Cho-Coq is the Vote contract. As its name implies, it allows users to vote for a candidate among a list set at origination. The contracts retains the number of votes towards each candidate. Any user can vote any number of times, but must send 5 tez ($5000000\mu tez$) with each vote, otherwise the transaction is refused.
 
+Below is the code of the contract, where we added (in comments) the type of the stack at the end of every line of code.
+
 \begin{lstlisting}[language=michelson,numbers=left]
 storage (map string int %candidates);
 parameter string %chosen;
-code { AMOUNT; PUSH mutez 5000000; COMPARE; GT;
-       IF { FAIL } {}; # Check enough mutez were sent
-       DUP; DIP { CDR; DUP }; CAR; DUP;
-       DIP {
-             GET; ASSERT_SOME; # Check the string sent is a key of the map
-             PUSH int 1; ADD; SOME # Increment the value associated by one
+code { AMOUNT; PUSH mutez 5000000; COMPARE; GT; # bool::(parameter, storage)::[]
+       IF { FAIL } {}; # (parameter, storage)::[]
+       DUP; DIP { CDR; DUP }; CAR; DUP; # parameter::parameter::storage::storage::[]
+       DIP { # parameter::storage::storage::[]
+             GET; ASSERT_SOME; # int::storage::[]
+             PUSH int 1; ADD; SOME # int option::storage::[]
            };
-       UPDATE; NIL operation; PAIR # Update the storage
+       UPDATE; # storage::[]
+       NIL operation; PAIR # (list operation, storage)::[]
      }
 \end{lstlisting}
 
 Let's look in more details at our voting program: First, the description of the
 storage and parameter types is given on lines \texttt{1-2}.  Then the
 code of the contract is given.
+For all contracts, the execution must begin with a stack of the form !(parameter, storage)::[]!.
 On line \texttt{5}, !AMOUNT! pushes on the stack the amount
 of (in $\mu$tez) sent to the contract address by the user. The threshold amount
 (5tez) is also pushed on the stack on line \texttt{6} and compared to
@@ -127,7 +131,7 @@ value at the top of the stack (!chosen!). On line
 on top of the stack, and pushes the !candidates! map updated
 with the incremented value for !chosen!. Finally, we push an
 empty list of operations with !NIL operation!, and pair the
-two elements on top of the stack to get the correct return type.\\
+two elements on top of the stack to get the correct return type for contracts, which is !(list operation, storage)::[]!.\\
 
 We can then specify this smart-contract as follows (\texttt{amount} refers to the quantity of $\mu tez$ sent by the caller for the transaction):
 {\small
@@ -153,24 +157,25 @@ parameter (pair (signature %received_sig) (nat :rain %rain_level));
 storage (pair (pair (address %under_addr)
                     (address %over_addr))
               (pair (nat %rain_thresh) (key %weather_service_key)));
-code { DUP; DUP;
-       CAR; MAP_CDR{PACK ; BLAKE2B};
-       SWAP; CDDDR;
-       DIP {UNPAIR}; CHECK_SIGNATURE ; # Check if the data has been correctly signed
-       ASSERT; # If signature is not correct, end the execution
-       DUP; DUP; DUP; DIIIP{CDR}; # Place storage type on bottom of stack
-       DIIP{CDAR};                # Place contracts below numbers
-       DIP{CADR};   # Get actual rain
-       CDDAR;         # Get rain threshold
-       CMPLT; IF {CAR} {CDR};     # Select contract to receive tokens
-       CONTRACT unit; BALANCE; UNIT; TRANSFER_TOKENS; # Setup and execute transfer
-       NIL operation; SWAP; CONS;
-       PAIR };
+code { DUP; DUP; # (param, sto)::(param, sto)::(param, sto)::[]
+       CAR; MAP_CDR{PACK ; BLAKE2B}; (signature, bytes)::(param, sto)::(param, sto)::[] 
+       SWAP; CDDDR; # key::(signature, bytes)::(param, sto)::[]
+       DIP {UNPAIR}; CHECK_SIGNATURE ; # bool::(param, sto)::[]
+       ASSERT; # (param, sto)::[]
+       DUP; DUP; DUP; DIIIP{CDR}; # (param, sto)::(param, sto)::(param, sto)::sto::[]
+       DIIP{CDAR}; # (param, sto)::(param, sto)::(address, address)::sto::[]
+       DIP{CADR};   # (param, sto)::nat::(address, address)::sto::[]
+       CDDAR;         # nat::nat::(address, address)::sto::[]
+       CMPLT; IF {CAR} {CDR}; # address::sto::[]
+       CONTRACT unit; BALANCE; UNIT; TRANSFER_TOKENS; # operation::sto::[]
+       NIL operation; SWAP; CONS; # (list operation)::sto::[]
+       PAIR #  (list operation, sto)::[]
+     }
 \end{lstlisting}
 
-Let's take a closer look at how this contract works. We start by duplication the parameters twice on line \texttt{1}. We then !PACK! the sent rain level and hash it using the !BLAKE2B! instruction on line{2}. We use this encrypted data to check that the sent signature was indeed the one of the weather service on lines \texttt{4-5}; if not, the execution fails.
+Let's take a closer look at how this contract works. We start by duplication the parameters twice on line \texttt{5}. We then !PACK! the sent rain level and hash it using the !BLAKE2B! instruction on line \texttt{6}. We use this encrypted data to check that the sent signature was indeed the one of the weather service on lines \texttt{8-9}; if not, the execution fails.
 
-On lines \texttt{6} to \texttt{8}, we manipulate the stack so has to have the stored contracts after the actual rain quantity and the threshold. We then compare on line \texttt{9} the threshold to the level; if the level is below the threshold, we chose the \texttt{under\_addr}, and if it is above, we choose the \texttt{over\_addr}. We use this address to forge a transaction, sending all the tokens held by the contract on line \texttt{10}. Finally, on line \texttt{11-12}, we construct the return type of the contract (a pair containing the sent operations, i.e. the transfer, and the unchanged storage).\\
+On lines \texttt{10} to \texttt{13}, we manipulate the stack so has to have the stored contracts after the actual rain quantity and the threshold. We then compare on line \texttt{9} the threshold to the level; if the level is below the threshold, we chose the \texttt{under\_addr}, and if it is above, we choose the \texttt{over\_addr}. We use this address to forge a transaction, sending all the tokens held by the contract on line \texttt{15}. Finally, on line \texttt{16-17}, we construct the return type of the contract (a pair containing the sent operations, i.e. the transfer, and the unchanged storage).\\
 
 Given the description above, we can easily give a specification of the contract. In the followings specifications, I'll note as ``preconditions'' the conditions that must be verified for the contract not to call \lstinline{FAIL} (or a related macro). The ``postconditions'' fully describe the new state of the storage at the end of the execution, as well as the potential generated operations.
 
