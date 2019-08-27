@@ -227,16 +227,30 @@ In addition to its specification and documentation capabilities, Ott can also, u
 
 \chapter{The Albert Programming Language}
 
+\section*{Notations}
+
+The general form of a typing judgment, as they will be presented in this report, is as below:
+
+$$\Gamma \vdash term : ty \rightarrow ty'$$
+
+Which means that $term$, in the typing context $\Gamma$ (containing type declarations as well as global function types), associates the input type $ty$ to the output type $ty'$. The semantic judgement has a similar form:
+
+$$E \models term : val \Rightarrow val'$$
+
+Which means that $term$, evaluated in the evaluation context $E$ (which contains global function definitions), associates the output $val'$ to the input $val$.
+
+In the following sections, we'll also add notations such as $\vdash_{ins}$, $\vdash_{rhs}$, \ldots to specify which category of terms the rule applies to : instruction, right-hand-side, \ldots
+
 \section{Overview}
 
 Albert is a higher-level programming language than Michelson~\cite{albertProposal} under development at Nomadic Labs. The main difference with Michelson is that, in Albert, the stack is abstracted by a record with named variables, which makes their manipulations easier. The variables in the main ``stack'' record are handled linearly, which means they are consumed when used, and must be explicitly duplicated if they need to be used twice. This reflects Michelson's behaviour, where values on the stack are indeed consumed by instructions using them.\\
 
-The linear typing is handled by Albert's typing rules, which keeps track of the content of the stack (without its ordering) at any point during the execution. For instance, below is a type of an instruction that assigns the value contained in a variable \texttt{foo} to a variable \texttt{bar}.
+Albert's linear typing is handled by its typing rules, which keeps track of the content of the stack (without its ordering) at any point during the execution. For instance, below is a type of an instruction that assigns the value contained in a variable \texttt{foo} to a variable \texttt{bar}.
 
 $$
 \inferrule*
     { }
-    { \Gamma \vdash bar = foo : \{ foo : ty \} @ rty \Rightarrow \{ bar : ty \} @ rty }
+    { \Gamma \vdash_{ins} bar = foo : \{ foo : ty \} @ rty \rightarrow \{ bar : ty \} @ rty }
 $$
 
     Where \texttt{rty} is the type of the other values contained in the stack, and \texttt{@} denotes the join operation for record types. It's important to note that the join operator is not a simple append, and is commutative. It's actually equivalent to the \texttt{merge} operation in MergeSort, with the fields of the record sorted by lexicographic order of the labels. This canonical form is also extended to record types, where fields must be sorted in lexicographic order for the type to be deemed ``well formed''.
@@ -246,7 +260,7 @@ The semantics of this simple assign operation mirrors its typing (the \texttt{@}
 $$
 \inferrule*
     { }
-    { E \vdash bar = foo / \{ foo = val \} @ rval \rightarrow \{ bar = val \} @ rval }
+    { E \models_{ins} bar = foo / \{ foo = val \} @ rval \Rightarrow \{ bar = val \} @ rval }
     $$
 
 \subsection{Types}
@@ -309,8 +323,8 @@ I started my work on Albert by writing down the formal semantics of the language
 
 $$
 \inferrule* [left=(instr\_assign)]
-    { E \vdash rhs / val \rightarrow val' \\ E \vdash_{lhs} / val' \rightarrow val'' }
-    { E \vdash lhs = rhs / val \rightarrow val'' }
+    { E \models_{rhs} rhs / val \Rightarrow val' \\ E \models_{lhs} / val' \Rightarrow val'' }
+    { E \models_{ins} lhs = rhs / val \Rightarrow val'' }
 $$
 
 Most of the language is actually based on the \texttt{lhs} = \texttt{rhs} assignment instruction (as seen above), which is necessary to ensure all calculated values are indeed named and stored. An Albert program therefore resembles a series of assignments, with the left-hand side being either a simple variable, or a record destructuring. It's important to note that, since an instruction always manipulates a record (representing Michelson's stack) the input value of \lstinline{rhs} and output value of \lstinline{rhs} are necessarily records, while the value passed from \lstinline{rhs} to \lstinline{lhs} can be anything. We'll note below the formal semantics of these two left-hand sides.
@@ -318,13 +332,13 @@ Most of the language is actually based on the \texttt{lhs} = \texttt{rhs} assign
 $$
 \inferrule* [left=(lhs\_var)]
     { }
-    { E \vdash var / val \rightarrow \{ var = val \} }
+    { E \models_{lhs} var / val \Rightarrow \{ var = val \} }
 $$
 
 $$
 \inferrule* [left=(lhs\_record)]
     { }
-    { E \vdash \{ l_1 = x_1 ; .. ; l_n = x_n \} / \{ l_1 = val_1 ; .. ; l_n = val_n \} \rightarrow \{ x_1 = val_1 ; .. ; x_n = val_n \} }
+    { E \models_{lhs} \{ l_1 = x_1 ; .. ; l_n = x_n \} / \{ l_1 = val_1 ; .. ; l_n = val_n \} \Rightarrow \{ x_1 = val_1 ; .. ; x_n = val_n \} }
 $$
 
     Actual calculations are performed in the right-hand side of assignment instructions. Right-hand sides can first be a simple argument: either a constant value, a variable or a record constructed from variables; as arguments are used as \lstinline{rhs}, their input value is always a record (representing the stack).
@@ -332,42 +346,42 @@ $$
 $$
 \inferrule* [left=(arg\_var)]
     { }
-    { E \vdash_{arg} var / \{ var = val \} \rightarrow val }
+    { E \models_{arg} var / \{ var = val \} \Rightarrow val }
 $$
 $$
 \inferrule* [left=(arg\_val)]
     { }
-    { E \vdash_{arg} val / \{\} \rightarrow val }
+    { E \models_{arg} val / \{\} \Rightarrow val }
 $$
 $$
 \inferrule* [left=(arg\_record)]
     { }
-    { E \vdash_{arg} \{ l_1 = x_1 ; .. ; l_n = x_n \} / \{ x_1 = val_1 ; .. ; x_n = val_n \} \rightarrow \{ l_1 = val_1 ; .. ; l_n = val_n \} }
+    { E \models_{arg} \{ l_1 = x_1 ; .. ; l_n = x_n \} / \{ x_1 = val_1 ; .. ; x_n = val_n \} \Rightarrow \{ l_1 = val_1 ; .. ; l_n = val_n \} }
 $$
 
 $$
 \inferrule* [left=(rhs\_arg)]
-    { E \vdash_{arg} arg / val \rightarrow val' }
-    { E \vdash_{rhs} arg / val \rightarrow val' }
+    { E \models_{arg} arg / val \Rightarrow val' }
+    { E \models_{rhs} arg / val \Rightarrow val' }
 $$
 
 Right-hand sides can also be a function application (to arguments). Functions can either be primitives (for instance, the \lstinline{dup} instruction is represented as a function) or user-defined. A user defined function is found in the environment ($E$), and is simply seen as an instruction (all functions are global).
 
 $$
 \inferrule* [left=(f\_fvar)]
-    { fvar = instruction \in E \\ E \vdash_{ins} instruction / val \rightarrow val' }
-    { E \vdash_{f} f / val \rightarrow val' }
+    { fvar = instruction \in E \\ E \models_{ins} instruction / val \Rightarrow val' }
+    { E \models_{f} f / val \Rightarrow val' }
 $$
 $$
 \inferrule* [left=(f\_dup)]
     { }
-    { E \vdash_{f} dup / val \rightarrow \{ car = val; cdr = val \} }
+    { E \models_{f} dup / val \Rightarrow \{ car = val; cdr = val \} }
 $$
 
 $$
 \inferrule* [left=(rhs\_app)]
-    { E \vdash_{arg} arg / val \rightarrow val' \\ E |-_{funct} f / val' \rightarrow val'' }
-    { E \vdash_{rhs} f arg / val \rightarrow val'' }
+    { E \models_{arg} arg / val \Rightarrow val' \\ E \models_{funct} f / val' \Rightarrow val'' }
+    { E \models_{rhs} f arg / val \Rightarrow val'' }
 $$
 
 Right-hand sides can also act directly on record, either by projection (taking a specific fields of the record by name) or by updating them (which of course consumes other values on the stack).
@@ -375,13 +389,13 @@ Right-hand sides can also act directly on record, either by projection (taking a
 $$
 \inferrule* [left=(rhs\_projection)]
     { \{ l = val \} @ rval = rval' }
-    { E \vdash_{rhs} var.l / rval' \rightarrow val }
+    { E \models_{rhs} var.l / rval' \Rightarrow val }
 $$
 $$
 \inferrule* [left=(rhs\_update)]
     { \{ l_1 = val'_1 ; .. ; l_n = val'_n \} @ rval = rval'
     \\ \{ l_1 = val_1 ; .. ; l_n = val_n \} @ rval = rval''}
-    { E \vdash_{rhs} \{ var\:with\:l_1 = var_1 ; .. ; l_n = var_n \} / \{ var = rval' ; var_1 = val_1 ; .. ; var_n = val_n \} -> rval'' }
+    { E \models_{rhs} \{ var\:with\:l_1 = var_1 ; .. ; l_n = var_n \} / \{ var = rval' ; var_1 = val_1 ; .. ; var_n = val_n \} \Rightarrow rval'' }
 $$
 
 Right-hand sides also include most of the arithmetic operations on numerical data. I give here both the $+$ rule, and the $/mod$ rule, interesting in that it returns a pair containing the quotient and the remainder of the euclidean division. The $-$ and $\times$ rules are similar to the $+$ ones.
@@ -389,12 +403,12 @@ Right-hand sides also include most of the arithmetic operations on numerical dat
 $$
 \inferrule* [left=(rhs\_add)]
     {  }
-    { E \vdash_{rhs} (x_1 + x_2) / \{ x_1 = nv_1 ; x_2 = nv_2 \} \rightarrow nv_1 + nv_2 }
+    { E \models_{rhs} (x_1 + x_2) / \{ x_1 = nv_1 ; x_2 = nv_2 \} \Rightarrow nv_1 + nv_2 }
 $$
 $$
 \inferrule* [left=(rhs\_ediv)]
     { }
-    { E \vdash_{rhs} (x_1\:/mod\:x_2) / \{ x_1 = nv_1 ; x_2 = nv_2 \} \rightarrow \{ quotient = nv_1 / nv_2 ; remainder = nv_1 \% nv_2 \} }
+    { E \models_{rhs} (x_1\:/mod\:x_2) / \{ x_1 = nv_1 ; x_2 = nv_2 \} \Rightarrow \{ quotient = nv_1 / nv_2 ; remainder = nv_1 \% nv_2 \} }
 $$
 
 Apart from assignments, the instruction language is also completed with a few specific instructions: for instance, the \lstinline{drop} instruction, which behaves similarly to the !DROP! instruction in Michelson.
@@ -402,26 +416,26 @@ Apart from assignments, the instruction language is also completed with a few sp
 $$
 \inferrule* [left=(rhs\_update)]
     { }
-    { E \vdash_{ins} DROP var / \{ var = val \} \rightarrow \{ \} }
+    { E \models_{ins} DROP var / \{ var = val \} \Rightarrow \{ \} }
 $$
 
 The instructions are linked together as sequences of instructions. The sequence rule is the following:
 
 $$
 \inferrule* [left=(ins\_frame)]
-    { E \vdash_{ins} I_1 / val \rightarrow val' \\
-      E \vdash_{ins} I_2 / val' \rightarrow val'' }
-    { E \vdash_{ins} I_1 ; I_2 / val \rightarrow val'' }
+    { E \models_{ins} I_1 / val \Rightarrow val' \\
+      E \models_{ins} I_2 / val' \Rightarrow val'' }
+    { E \models_{ins} I_1 ; I_2 / val \Rightarrow val'' }
 $$
 
 This seems pretty straightforward; however, we quickly see that the input and output values used by instructions (which are record values representing the stack) are incomplete: as the current rules are laid out, the only variables in the stack present in $val$ are the one actually consumed by $I_1$, and the ones present in val' are therefore either the one produced by $I_1$, or the one consumed by $I_2$, which are not necessarily the same. We therefore need to add a new rule, to allow for the passed stack fragments to be completed by unused variables. We call this rule \texttt{frame}, and specify it below.
 
 $$
 \inferrule* [left=(ins\_seq)]
-    { E \vdash_{ins} instruction / rval \rightarrow rval' \\
+    { E \models_{ins} instruction / rval \Rightarrow rval' \\
       rval @ rval'' = rval_1 \\
       rval' @ rval'' = rval_2 }
-    { E \vdash_{ins} instruction / rval_1 \rightarrow rval_2 }
+    { E \models_{ins} instruction / rval_1 \Rightarrow rval_2 }
 $$
 
 This rule is, of course, mirrored in the typing of the instruction.\\
@@ -430,8 +444,8 @@ Using these rules (and the typing rules), I proved a few important properties on
 
 $$
 \inferrule* [left=subject\_reduction]
-            { G \vdash_{val} v : ty \\ G \vdash_{ins} ins : ty \Rightarrow ty' \\ G \vdash_{ins} ins / v \rightarrow v' }
-            { G \vdash_{val} v' : ty' }
+            { \Gamma \vdash_{val} v : ty \\ \Gamma \vdash_{ins} ins : ty \rightarrow ty' \\ \Gamma \vdash_{ins} ins / v \rightarrow v' }
+            { \Gamma \vdash_{val} v' : ty' }
 $$
 
 with similar properties on right-hand sides, arguments, functions and left-hand sides. This property allows us to ``connect'' typing and semantic rules. Although it seems simple to prove in most cases, since typing and semantic rules are already quite close, in practice it proved a hassle for some of the rules, as the Coq representation of the rules generated by Ott often uses \texttt{List.map} with pattern destructuring and restructuring, and can be difficult to manipulate.\\
@@ -440,8 +454,8 @@ Using this first property, it becomes easy to prove the progress property, which
 
 $$
 \inferrule* [left=progress]
-            { G \vdash_{val} v : ty \\ G \vdash_{ins} ins : ty \Rightarrow ty' }
-            { \exists v', G \vdash_{ins} ins / v \rightarrow v' }
+            { \Gamma \vdash_{val} v : ty \\ \Gamma \vdash_{ins} ins : ty \rightarrow ty' }
+            { \exists v', \Gamma \vdash_{ins} ins / v \rightarrow v' }
 $$
 
 Again, with similar properties defined on the other terms of our language. The progress property is extremely important, as it guarantees that interpretation of the program cannot get stuck if the program is well-typed. In the case of Albert, we're not planning on building an interpreter, but this property is still useful to show the completeness of the semantic rules, as it can only be proved if every typing rule as a corresponding semantic rule. We would also want to be able to prove that typing and semantics are preserved when compiling to Michelson, which already respects both subject reduction and progress (as most well defined programming languages do).
@@ -456,20 +470,20 @@ Constructor are determined by a label, and applied (as a function) on a single v
 
 $$
 \inferrule* [left=(val\_constr)]
-    { G \vdash_{val} val : ty \\ [ constructor : ty ] @ vty' = vty }
-    { G \vdash_{val} (constructor\:val : vty) : vty }
+    { \Gamma \vdash_{val} val : ty \\ [ constructor : ty ] @ vty' = vty }
+    { \Gamma \vdash_{val} (constructor\:val : vty) : vty }
 $$
 
 $$
 \inferrule* [left=(f\_constr)]
     { [ constructor : ty ] @ vty' = vty }
-    { G \vdash_{funct} constructor\:vty : ty \Rightarrow vty }
+    { \Gamma \vdash_{funct} constructor\:vty : ty \rightarrow vty }
 $$
 
 $$
 \inferrule* [left=(f\_constr)]
     { }
-    { E \vdash_{funct} constructor\:vty / val \rightarrow (constructor\:val : vty) }
+    { E \models_{funct} constructor\:vty / val \Rightarrow (constructor\:val : vty) }
 $$
 
 Like records, variant types have a ``canonical form'', where constructors are ordered by lexicographic order. Therefore, the \texttt{@} join relation used above behaves exactly like the one on records.
@@ -480,21 +494,21 @@ $$
 \inferrule* [left=(rhs\_match)]
     { \{var : [ cons_1 : ty_1 | \ldots | cons_k : ty_k ]\} @ rty = rty' \\
       \{var_1 : ty_1\} @ rty = rty_1 \ldots \{var_k : ty_k\} @ rty = rty_k \\
-      G \vdash_{rhs} rhs_1 : rty_1 \Rightarrow ty \ldots G \vdash_{rhs} rhs_k : rty_k \Rightarrow ty }
-    { G \vdash_{rhs} match\:var\:with\:cons_1\:var_1 \rightarrow rhs_1 | \ldots | cons_k\:var_k \rightarrow rhs_k\:end : rty' \Rightarrow ty }
+      \Gamma \vdash_{rhs} rhs_1 : rty_1 \rightarrow ty \ldots \Gamma \vdash_{rhs} rhs_k : rty_k \rightarrow ty }
+    { \Gamma \vdash_{rhs} match\:var\:with\:cons_1\:var_1 \rightarrow rhs_1 | \ldots | cons_k\:var_k \rightarrow rhs_k\:end : rty' \Rightarrow ty }
 $$
 
 $$
 \inferrule* [left=(rhs\_match\_found)]
-    { E \vdash_{rhs} rhs / \{ var' = val' \} \rightarrow val }
-    { E \vdash_{rhs} match\:var\:with\:cons\:var' \rightarrow rhs | <branches\_rhs> end / \{ var = (cons\:val' : vty) \} \rightarrow val }
+    { E \models_{rhs} rhs / \{ var' = val' \} \Rightarrow val }
+    { E \models_{rhs} match\:var\:with\:cons\:var' \Rightarrow rhs | <branches\_rhs> end / \{ var = (cons\:val' : vty) \} \Rightarrow val }
 $$
 
 $$
 \inferrule* [left=(rhs\_match\_next)]
     { cons \neq cons' \\
-      E \vdash_{rhs} match\:var\:with\:branches\_rhs\:end / \{ var = (cons\:val' : vty) \} \rightarrow val' }
-    { E \vdash_{rhs} match\:var\:with\:cons'\:var' \rightarrow rhs | <branches\_rhs> end / \{ var = (cons\:val' : vty) \} \rightarrow val }
+      E \models_{rhs} match\:var\:with\:branches\_rhs\:end / \{ var = (cons\:val' : vty) \} \Rightarrow val' }
+    { E \models_{rhs} match\:var\:with\:cons'\:var' \Rightarrow rhs | <branches\_rhs> end / \{ var = (cons\:val' : vty) \} \Rightarrow val }
 $$
 
 While these rules seem pretty verbose, they are quite simple to explain: every branch should have the same type (in an environment where the pattern's \texttt{var} has the type related to the constructor). Evaluation of a match simply consists in evaluating the correct right-hand side (by typing, all the branches must be specified, so the match always succeed). By typing, we also see that every-branch of the pattern-matching must consume the exact same variables from the stack. This is a severe restriction which could be difficult to deal with while programming in Albert, but is necessary in order for the compiled Michelson program to be correctly typed. The right-hand side match is particularly constrained, since the program can't even \texttt{drop} unnecessary variables in a branch.
@@ -506,27 +520,27 @@ As in Michelson, Albert implements linked lists. The language first gives the us
 $$
 \inferrule* [left=(rhs\_list)]
     { }
-    { E \vdash_{rhs} [ var_1 ; .. ; var_n ] / \{ var_1 = val_1 ; .. ; var_n = val_n \} \rightarrow [ val_1 ; .. ; val_n ] }
+    { E \models_{rhs} [ var_1 ; .. ; var_n ] / \{ var_1 = val_1 ; .. ; var_n = val_n \} \Rightarrow [ val_1 ; .. ; val_n ] }
 $$
 
 $$
 \inferrule* [left=(rhs\_cons)]
     { }
-    { x_1 :: x_2 / \{ x_1 = val_1 ; x_2 = lval_2 \} \rightarrow val_1 :: lval_2 }
+    { x_1 :: x_2 / \{ x_1 = val_1 ; x_2 = lval_2 \} \Rightarrow val_1 :: lval_2 }
 $$
 
 More interestingly, programmers can also pattern-match on an empty or non-empty list (to mimic the !IF_CONS! instruction of Michelson). As in the previously-described variant pattern-matching, list pattern-matching exists both as a right-hand side and as an instruction (we show below the instruction version of the semantic rules, for a change).
 
 $$
 \inferrule* [left=(ins\_list\_match\_nil)]
-    { \{ var = [] \} @ rval = rval' \\ E \vdash_{ins} I_1 / rval \rightarrow val }
-    { E \vdash_{ins} match\:var\:with [] \rightarrow I_1 | var_1 :: var_2 \rightarrow I_2\:end / rval' \rightarrow val }
+    { \{ var = [] \} @ rval = rval' \\ E \models_{ins} I_1 / rval \Rightarrow val }
+    { E \models_{ins} match\:var\:with [] \Rightarrow I_1 | var_1 :: var_2 \Rightarrow I_2\:end / rval' \Rightarrow val }
 $$
 
 $$
 \inferrule* [left=(ins\_list\_match\_cons)]
-    { \{ var_1 = val_1 :: tl \} @ rval = rval' \\ \{ var_1 = val_1 ; var_2 = tl \} @ rval = rval'' \\ E \vdash_{ins} I_2 / rval'' \rightarrow val }
-    { E \vdash_{ins} match\:var\:with [] \rightarrow I_1 | var_1 :: var_2 \rightarrow I_2\:end / rval' \rightarrow val }
+    { \{ var_1 = val_1 :: tl \} @ rval = rval' \\ \{ var_1 = val_1 ; var_2 = tl \} @ rval = rval'' \\ E \models_{ins} I_2 / rval'' \Rightarrow val }
+    { E \models_{ins} match\:var\:with [] \Rightarrow I_1 | var_1 :: var_2 \Rightarrow I_2\:end / rval' \Rightarrow val }
 $$
 
 More specific to lists (and to maps, as we'll see) are the \lstinline{map} (as a right-hand-side) and \lstinline{for} (as an instruction) operations, which mirror the !ITER! instruction. We'll show below the \lstinline{map} semantic rules.
@@ -534,13 +548,13 @@ More specific to lists (and to maps, as we'll see) are the \lstinline{map} (as a
 $$
 \inferrule* [left=(rhs\_list\_map\_nil)]
     { }
-    { E \vdash_{rhs} map\:var\:in\:var'\:do\:rhs\:done / \{ var' = [] \} \rightarrow [] }
+    { E \models_{rhs} map\:var\:in\:var'\:do\:rhs\:done / \{ var' = [] \} \Rightarrow [] }
 $$
 
 $$
 \inferrule* [left=(rhs\_list\_map\_cons)]
-    { E \vdash_{rhs} rhs / \{ var = val \} \rightarrow val' \\ E \vdash_{rhs} map\:var\:in\:var'\:do\:rhs\:done / \{ var' = tl \} \rightarrow tl' }
-    { E \vdash_{rhs} map\:var\:in\:var'\:do\:rhs\:done / \{ var' = val :: tl \} \rightarrow val' :: tl' }
+    { E \models_{rhs} rhs / \{ var = val \} \Rightarrow val' \\ E \models_{rhs} map\:var\:in\:var'\:do\:rhs\:done / \{ var' = tl \} \Rightarrow tl' }
+    { E \models_{rhs} map\:var\:in\:var'\:do\:rhs\:done / \{ var' = val :: tl \} \Rightarrow val' :: tl' }
 $$
 
 \subsubsection{Maps}
@@ -550,20 +564,20 @@ Albert also implements associative maps, like Michelson does. These maps impleme
 $$
 \inferrule* [left=(get\_nil)]
    { }
-   { E \vdash_{rhs} var[x] / \{ var = \{\} ; x = val \} \rightarrow None \{\} }
+   { E \models_{rhs} var[x] / \{ var = \{\} ; x = val \} \Rightarrow None \{\} }
 $$
 
 $$
 \inferrule* [left=(get\_found)]
    { }
-   { E \vdash_{rhs} var[x] / \{ var = \{ val \mapsto val' ; mval \}; x = val \} \rightarrow Some\:val' }
+   { E \models_{rhs} var[x] / \{ var = \{ val \mapsto val' ; mval \}; x = val \} \Rightarrow Some\:val' }
 $$
 
 $$
 \inferrule* [left=(get\_next)]
    { val_1 \neq val_2 \\
-     E \vdash_{rhs} var[x] / \{ var = mval ; x = val_2 \} \rightarrow val'_2}
-   { E \vdash_{rhs} var[x] / \{ var = { val_1 \mapsto val_1' ; mval } ; x = val_2 \} \rightarrow val'_2 }
+     E \models_{rhs} var[x] / \{ var = mval ; x = val_2 \} \Rightarrow val'_2}
+   { E \models_{rhs} var[x] / \{ var = { val_1 \mapsto val_1' ; mval } ; x = val_2 \} \Rightarrow val'_2 }
  $$
 
 \noindent And the semantics for the \texttt{update} operation are the following.
@@ -571,31 +585,31 @@ $$
 $$
 \inferrule* [left=(update\_nil\_none)]
    { }
-   { E \vdash_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = \{\} ; x = v_1 ; y = None \{\} \} \rightarrow \{\} }
+   { E \models_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = \{\} ; x = v_1 ; y = None \{\} \} \Rightarrow \{\} }
 $$
 
 $$
 \inferrule* [left=(update\_nil\_some)]
    { }
-   { E \vdash_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = \{\} ; x = v_1 ; y = Some\:v_2 \} \rightarrow \{ v_1 \mapsto v_2 \} }
+   { E \models_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = \{\} ; x = v_1 ; y = Some\:v_2 \} \Rightarrow \{ v_1 \mapsto v_2 \} }
 $$
 
 $$
 \inferrule* [left=(update\_cons\_none)]
    { }
-   { E \vdash_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = \{ v_1 \mapsto v_3 ; mval \} ; x = v_1 ; y = None \{\} \} \rightarrow mval }
+   { E \models_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = \{ v_1 \mapsto v_3 ; mval \} ; x = v_1 ; y = None \{\} \} \Rightarrow mval }
 $$
 
 $$
 \inferrule* [left=(update\_cons\_some)]
    { }
-   { E \vdash_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = \{ v_1 \mapsto v_3 ; mval \} ; x = v_1 ; y = Some\:v_2 \} \rightarrow \{ v_1 \mapsto v_2 ; mval \} }
+   { E \models_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = \{ v_1 \mapsto v_3 ; mval \} ; x = v_1 ; y = Some\:v_2 \} \Rightarrow \{ v_1 \mapsto v_2 ; mval \} }
 $$
 
 $$
 \inferrule* [left=(update\_next)]
-   { v_1 \neq v_1' \\ E \vdash_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = mval ; x = v_1 ; y = v_2 \} \rightarrow mval' }
-   { E \vdash_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = \{ v_1' \mapsto v_3 ; mval \} ; x = v_1 ; y = v_2 \} \rightarrow \{ v_1' \mapsto v_3 ; mval' \} }
+   { v_1 \neq v_1' \\ E \models_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = mval ; x = v_1 ; y = v_2 \} \Rightarrow mval' }
+   { E \models_{rhs} \{ var\:with\:x \mapsto y \} / \{ var = \{ v_1' \mapsto v_3 ; mval \} ; x = v_1 ; y = v_2 \} \Rightarrow \{ v_1' \mapsto v_3 ; mval' \} }
 $$
 
 
@@ -604,16 +618,16 @@ Moreover, like the list, maps can be iterated (and mapped) upon, in which case b
 $$
 \inferrule* [left=(ins\_map\_for\_nil)]
    { \{ var' = \{\} \} @ rval = rval' }
-   { E \vdash_{ins} for\:var \mapsto var'\:in\:var'\:do\:I_1\:done / rval' \rightarrow rval }
+   { E \models_{ins} for\:var \mapsto var'\:in\:var'\:do\:I_1\:done / rval' \Rightarrow rval }
 $$
 
 $$
 \inferrule* [left=(ins\_map\_for\_cons)]
     { \{ var = val ; var' = val' \} @ rval = rval' \\
-      E \vdash_{ins} I_1 / rval' \rightarrow rval1 \\
+      E \models_{ins} I_1 / rval' \Rightarrow rval1 \\
       \{ var'' = mval \} @ rval1 = rval'' \\
-      E \vdash_{ins} for\:var \mapsto var'\:in\:var''\:do\:I_1\:done / rval'' \rightarrow rval2 }
-    { E \vdash_{ins} for\:var \mapsto var'\:in\:var''\:do\:I_1\:done / \{ var'' = \{ val \mapsto val' ; mval \} \} \rightarrow rval2 }
+      E \models_{ins} for\:var \mapsto var'\:in\:var''\:do\:I_1\:done / rval'' \Rightarrow rval2 }
+    { E \models_{ins} for\:var \mapsto var'\:in\:var''\:do\:I_1\:done / \{ var'' = \{ val \mapsto val' ; mval \} \} \Rightarrow rval2 }
 $$
 
 \noindent Lastly, the language implements sets, which are simply maps where the key is the set element, and the value is simply unit.
@@ -684,15 +698,15 @@ We'll begin with the right-hand sides, which, has we've seen, contain most of th
 
 First off, arguments are usually pretty easy to compile, as they consist mostly in either values, variable calls or record construction (the latter being more complex).\\
 
-Values are also easy to compile by pushing Michelson's data onto the stack. However, we have to take into account a small specific case: some types can't actually be used with !PUSH! in Michelson, as they are not storable. Currently, the main type concerned by this limitation is !operation!; since we need to build a !list operation! at the end of our program, in order for it to have a correct Michelson's contract return type, we need to add a specific case to take care of that issue. We simply decide to produce !NIL operation! in that case, instead of a !PUSH!.
+Values are also easy to compile by pushing Michelson's data onto the stack. However, we have to take into account a small specific case: some types can't actually be used with !PUSH! in Michelson, as they are not storable. Currently, the main type concerned by this limitation is !operation!; since we need to build a !list operation! at the end of our program, in order for it to have a correct Michelson's contract return type, we need to add a specific case to take care of that issue. We simply decide to produce !NIL operation! in that case, instead of a !PUSH!.\\
 
 {\small
-\begin{longtable}{l|l}
+\begin{tabular}{l|l}
   Albert code & Michelson code\\
   \hline
   value (value $\neq$ ?([] : list operation)?) & !PUSH! \texttt{michType(type(}value\texttt{))} \texttt{michData(}value\texttt{)} \\
   ?([] : list operation)? & !NIL operation!
-\end{longtable}}
+\end{tabular}}\\
 
 Retrieving a variable from the stack is about as simple, since the only thing to do is to !DIG! it back from its position, which we can predict given the type of the stack thanks to the lexicographic order on records. The record construction rule is a bit more complicated, as it generalizes the var rule, and also requires us to build the record as we ?DIG? the variables from the stack. We'll note in the followings \texttt{var::stack} the operation of adding \texttt{var} in front of \texttt{stack}, \texttt{stack\#var} the index of \texttt{var} in \texttt{stack}, and \texttt{stack/var}, the \texttt{stack} where the \texttt{var} has been removed. We'll transparently also use the name of the variable to designate its value on the stack.
 
@@ -707,22 +721,22 @@ Retrieving a variable from the stack is about as simple, since the only thing to
   & $(var_1, (\ldots, var_k))::(stack/var_1/\ldots/var_k)$
 \end{longtable}}
 
-As well as simple argument retrieval, right-hand sides also include function calls on arguments, which are quite simple to compile. We simply compile the arguments, which results in the argument value being at the top of the stack (functions in Albert are unary, as we'll see later). We can then compile the function completely independently of the compiled argument. The resulting Michelson instruction will be one that pops a single elements from the top of the stack, and pushes its result as a single element to replace it. As we'll see below in \ref{functComp}, user-defined functions also respect this calling convention. We show below the compilation of a function call, as well as some of the functions present in Albert. We note $[|code|]_{stack \rightarrow stack'}$ the result of compiling $code$, which makes $stack$ evolve to $stack'$.
+As well as simple argument retrieval, right-hand sides also include function calls on arguments, which are quite simple to compile. We simply compile the arguments, which results in the argument value being at the top of the stack (functions in Albert are unary, as we'll see later). We can then compile the function completely independently of the compiled argument. The resulting Michelson instruction will be one that pops a single elements from the top of the stack, and pushes its result as a single element to replace it. As we'll see below in \ref{functComp}, user-defined functions also respect this calling convention. We show below the compilation of a function call, as well as some of the functions present in Albert. We note $[|code|]_{stack \Rightarrow stack'}$ the result of compiling $code$, which makes $stack$ evolve to $stack'$.
 
 {\small
 \begin{longtable}{l|p{6cm}|l}
   Albert code & Michelson code & Stack evolution \\
   \hline
-  f arg & $[|$arg$|]_{stack \rightarrow stack'}$ !;! $[|$f$|]_{stack' \rightarrow stack''}$ & $stack \rightarrow stack''$\\
+  f arg & $[|$arg$|]_{stack \Rightarrow stack'}$ !;! $[|$f$|]_{stack' \Rightarrow stack''}$ & $stack \Rightarrow stack''$\\
   \hline
-  ?dup? & ! DUP ; PAIR ! & $d::stack \rightarrow (d, d)::stack$\\
+  ?dup? & ! DUP ; PAIR ! & $d::stack \Rightarrow (d, d)::stack$\\
   \hline
-  ?contract ty? & !CONTRACT! \texttt{michType}(ty) & $a::stack \rightarrow c::stack$\\
-  ?address? & !ADDRESS! & $c::stack \rightarrow a::stack$\\
-  ?implicit_account? & !IMPLICIT_ACCOUNT! & $k::stack \rightarrow c::stack$\\
+  ?contract ty? & !CONTRACT! \texttt{michType}(ty) & $a::stack \Rightarrow c::stack$\\
+  ?address? & !ADDRESS! & $c::stack \Rightarrow a::stack$\\
+  ?implicit_account? & !IMPLICIT_ACCOUNT! & $k::stack \Rightarrow c::stack$\\
   \hline
   $(c_{i}: [c_1 : t_1 ; \ldots c_i : t_i ; \ldots ; c_k : t_k])$ & !RIGHT! \texttt{michType}($t_1$) !;! \newline $\ldots$ !;! \newline !LEFT! \texttt{michType}($[c_{i+1} : t_{i+1} ; \ldots ; c_k : t_k]$)
-  & $v::stack \rightarrow (Right (\ldots (Left\:v)))::stack$
+  & $v::stack \Rightarrow (Right (\ldots (Left\:v)))::stack$
 \end{longtable}
 }
 
@@ -806,7 +820,7 @@ Finally, Albert gives users the possibility to split their codes in multiple, no
 
 Since a function is defined as an instruction, it makes sense that the input and output types of a function would be record types representing the stack manipulated during the function execution. However, as user defined functions are actually called on arguments (with the usual function call syntax), it is necessary to transform the values produced by these arguments (which must be record values, and are therefore represented in Michelson by nested pairs) into values corresponding to the stack which will be manipulated by the function. This, of course, means !UNPAIR!ing the input value, and re-!PAIR!ing the output value at the end of the function. We simply add the code necessary to process this unpairing and re-pairing at the start and the end of the function code we'll inline.\\
 
-We must also consider the case of the entry function, that is the function which defines the code of the Michelson compiled smart contract. A Michelson smart contract must start its execution with its stack of type !(pair parameter_ty storage_ty)::nil!, and finish execution with a stack of type !(pair (list operation) storage_ty)::nil!. This specific constraint means that our entry point function must have type ?{ params : parameter_ty ; storage : storage_ty }? $\rightarrow$ ?{ operations ? : ? list operation ; storage : storage_ty}?. If the labels are in the correct (lexicographic) order, these types will be translated to the correct Michelson types.
+We must also consider the case of the entry function, that is the function which defines the code of the Michelson compiled smart contract. A Michelson smart contract must start its execution with its stack of type !(pair parameter_ty storage_ty)::nil!, and finish execution with a stack of type !(pair (list operation) storage_ty)::nil!. This specific constraint means that our entry point function must have type ?{ params : parameter_ty ; storage : storage_ty }? $\Rightarrow$ ?{ operations ? : ? list operation ; storage : storage_ty}?. If the labels are in the correct (lexicographic) order, these types will be translated to the correct Michelson types.
 
 \chapter*{Conclusion}
 \addcontentsline{toc}{chapter}{Conclusion}
