@@ -237,13 +237,13 @@ Which means that $term$, in the typing context $\Gamma$ (containing type declara
 
 $$E \models term : val \Rightarrow val'$$
 
-Which means that $term$, evaluated in the evaluation context $E$ (which contains global function definitions), associates the output $val'$ to the input $val$.
+Which means that $term$, evaluated in the evaluation context $E$ (which contains global function definitions), associates the input $val$ to the output $val'$.
 
 In the following sections, we'll also add notations such as $\vdash_{ins}$, $\vdash_{rhs}$, \ldots to specify which category of terms the rule applies to : instruction, right-hand-side, \ldots
 
 \section{Overview}
 
-Albert is a higher-level programming language than Michelson~\cite{albertProposal} under development at Nomadic Labs. The main difference with Michelson is that, in Albert, the stack is abstracted by a record with named variables, which makes their manipulations easier. The variables in the main ``stack'' record are handled linearly, which means they are consumed when used, and must be explicitly duplicated if they need to be used twice. This reflects Michelson's behaviour, where values on the stack are indeed consumed by instructions using them.\\
+Albert is a higher-level programming language than Michelson~\cite{albertProposal} under development at Nomadic Labs (all the related code is available at~\cite{albertRepo}). The main difference with Michelson is that, in Albert, the stack is abstracted by a record with named variables, which makes their manipulations easier. The variables in the main ``stack'' record are handled linearly, which means they are consumed when used, and must be explicitly duplicated if they need to be used twice. This reflects Michelson's behaviour, where values on the stack are indeed consumed by instructions using them.\\
 
 Albert's linear typing is handled by its typing rules, which keeps track of the content of the stack (without its ordering) at any point during the execution. For instance, below is a type of an instruction that assigns the value contained in a variable \texttt{foo} to a variable \texttt{bar}.
 
@@ -317,7 +317,7 @@ More Albert smart-contracts can be found in appendix \ref{appendix:moreAlbert}.
 \section{Formal semantics}
 \label{albertSemantics}
 
-I started my work on Albert by writing down the formal semantics of the language, mostly by following the typing rules (already written before the start of my internship). I'll give below the highlights of the rules.
+I started my work on Albert by writing down the formal semantics of the language, mostly by following the typing rules (which were already written before the start of my internship, and can be found in the \texttt{.ott} files of ~\cite{albertRepo}). I'll give below the highlights of the rules.
 
 \subsection{Bases of the language}
 
@@ -526,7 +526,7 @@ $$
 $$
 \inferrule* [left=(rhs\_cons)]
     { }
-    { x_1 :: x_2 / \{ x_1 = val_1 ; x_2 = lval_2 \} \Rightarrow val_1 :: lval_2 }
+    { E \models_{rhs} x_1 :: x_2 / \{ x_1 = val_1 ; x_2 = lval_2 \} \Rightarrow val_1 :: lval_2 }
 $$
 
 More interestingly, programmers can also pattern-match on an empty or non-empty list (to mimic the !IF_CONS! instruction of Michelson). As in the previously-described variant pattern-matching, list pattern-matching exists both as a right-hand side and as an instruction (we show below the instruction version of the semantic rules, for a change).
