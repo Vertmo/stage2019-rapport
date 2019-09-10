@@ -75,6 +75,50 @@ code { AMOUNT; PUSH mutez 5000000; COMPARE; GT;
 
 \section{The Albert Programming language}
 
+\begin{frame}{Albert general ideas}
+  \begin{itemize}
+    \item Imperative-looking language
+    \item Abstract the stack with variables in a global record
+    \item Generalize pairs by n-ary records
+    \item Generalize Or, Options, Booleans by n-ary variants
+    \item Global, non-recursive functions
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Syntax}
+  \begin{columns}
+    \begin{column}{.5\linewidth}
+\begin{verbatim}
+instr :=
+  | lhs = rhs
+  | instr ; instr
+  | drop x
+  | loop x do instr done
+  | ...
+lhs :=
+  | x
+  | { l_1 = x_1 ; ... ; l_n = x_n }
+  | (x_1, x_2)
+\end{verbatim}
+    \end{column}
+    \begin{column}{.5\linewidth}
+\begin{verbatim}
+rhs :=
+  | arg
+  | x_1 + x_2
+  | x.l
+  | { l_1 = x_1 ; ... ; l_n = x_n }
+  | ...
+
+arg :=
+  | x
+  | 42 | "Hello" | 500utz
+  | ...
+\end{verbatim}
+    \end{column}
+  \end{columns}
+\end{frame}
+
 \begin{frame}[fragile]{The voting contract, in Albert}
 \begin{lstlisting}[language=albert,basicstyle=\footnotesize]
 type storage_ty = { threshold : mutez; votes: map string nat }
@@ -109,7 +153,20 @@ def vote :
   $G \vdash n = size\:s : \{ s : string \} \Rightarrow \{ n : nat \}$
 \end{frame}
 
-\begin{frame}{More typing}
+\begin{frame}{Nice properties of a language}
+  \textbf{Properties of well formed type}\\
+  Notations : $G \vdash ty$, $G \vdash$\\
+  \begin{itemize}
+    \item $G \vdash ty \Rightarrow G \vdash$
+    \item $ty \equiv ty' \Rightarrow (G \vdash ty \Leftrightarrow G \vdash ty')$
+    \item $G \vdash instr : ty \rightarrow ty' \Rightarrow G \vdash ty \Rightarrow G \vdash ty'$
+  \end{itemize}
+
+  \textbf{Subject reduction and progress}\\
+  \begin{itemize}
+    \item $(G \vdash instr : ty \rightarrow ty') \Rightarrow (E \models v : ty) \Rightarrow (E \models instr / v \Rightarrow v') \Rightarrow (G \vdash v : ty')$
+    \item $(G \vdash instr : ty \rightarrow ty') \Rightarrow (E \models v : ty) \Rightarrow (\exists v', E \models instr / v \Rightarrow v')$
+  \end{itemize}
 \end{frame}
 
 \section{Albert's compiler to Michelson}
@@ -122,14 +179,48 @@ def vote :
   Micheline (S-expressions) $\rightarrow$ Pretty print to a \textit{.tz} file
 \end{frame}
 
-\begin{frame}{Compiler structure}
-\end{frame}
-
 \begin{frame}{Compiler architecture}
+  \centering
+  \includegraphics[height=5cm]{ressources/albert_comp.png}\\
+  Almost all the code is extracted from Coq or generated from Ott.
 \end{frame}
 
-\begin{frame}{Stack manipulations}
+\begin{frame}{Compiler pipeline}
+  \begin{enumerate}
+  \item Inlining of type definitions
+  \item Sorting of record and variant fields
+  \item Type-checking (adds some type annotations)
+  \item Compilation to MiChoCoq + function inlining
+  \end{enumerate}
+  Every step returns in an error monad (although compilation should not fail)
+\end{frame}
+
+\begin{frame}[fragile]{Stack manipulations}
+  Carry a representation of the stack (list of the variable names) during the compilation.
+
+  Use !DIG! and !DUG!
+
+  Examples:\\
+  $[[$?y = x?$|]$ = !DIG x ; DUG y!\\
+  $[|$?x + y?$|]$ = !DIG y ; DIG x ; ADD!\\
 \end{frame} 
+
+\begin{frame}[fragile]{Why DUG}
+  \begin{lstlisting}[language=albert]
+    match b with
+    True u -> x = 14; y = ``Hello''
+    | False u -> y = ``World''; x = 42
+    end
+  \end{lstlisting}
+  is of type ?{ b : bool } -> { u : unit ; x : nat ; y : string }?
+
+  and compiles to !DIG b; IF { ... } { ... }!
+
+  Without !DUG!ing, output stacks would be\\
+  !nat::string::unit::S! and !string::nat::unit::S!
+
+  Other solution: reorganize Albert's instructions (probably more efficient).
+\end{frame}
 
 \section{Conclusion}
 
