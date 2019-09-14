@@ -2,13 +2,14 @@
 \usetheme[progressbar=frametitle]{metropolis}
 
 \usepackage{listings}
+\usepackage{coqlang}
 \usepackage{graphicx}
 
 \input{albertlang}
 \input{michelsonlang}
 
 \title{Compiling a low-level language to Michelson}
-\author{Basile Pesin, under the supervision of Bruno Bernardo, Raphaël Caurderlier, and Julien Tesson}
+\author{Basile Pesin, under the supervision of Bruno Bernardo, Raphaël Cauderlier, and Julien Tesson}
 \institute{Nomadic Labs}
 
 \begin{document}
@@ -34,8 +35,7 @@
     \item Stack manipulations : !PUSH ty lit!, !DROP!, !SWAP!, !DUP!, !DIP { ins }! 
     \item Numeric types: !int!, !nat!, !mutez!, !timestamp! and ops: !ADD!, !COMPARE! \ldots
     \item Booleans, control structures: !IF { then } { else }!, !LOOP { body }!
-    \item Pairs: !CAR!, !CDR!, !PAIR! \ldots
-    \item Or: !LEFT ty!, !RIGHT ty!, !IF_LEFT!, !LOOP_LEFT!
+    \item Product types (!PAIR!, !CAR!, ...) and sum types (!LEFT!, !IF_LEFT {}!, ...)
     \item List, Set: !NIL ty!, !CONS!, !IF_CONS { then } { else }!, !ITER { body }! \ldots
     \item Map: !EMPTY_MAP tyk tyv!, !UPDATE!, !MEM!, !GET! \ldots
     \item Domain specific operations
@@ -153,6 +153,48 @@ def vote :
   $G \vdash n = size\:s : \{ s : string \} \Rightarrow \{ n : nat \}$
 \end{frame}
 
+\begin{frame}[fragile]{Albert ``source''}
+  Using Ott to define the rules and generate AST in Coq.
+  {\footnotesize
+\begin{verbatim}
+instruction, I :: 'instr_' ::= {{com Instruction}}
+  | drop var :: :: drop {{com Resource dropping}}
+
+  defn
+    g |- instruction : ty => ty' :: :: instr :: T_ by
+
+    ---------------------------------- :: drop
+    g |- drop var : {var : ty} => unit
+
+  defn
+    E |- instruction / val -> val' :: :: instr :: instr_ by
+
+    ------------------------------------------------ :: drop
+    E |- drop var / { var = val } -> {}
+\end{verbatim}}
+\end{frame}
+
+\begin{frame}[fragile]{Difficulties}
+  Ott representation of n-ary rules
+  {\footnotesize
+\begin{verbatim}
+g |- val_1 : ty_1 .. g |- val_n : ty_n
+-------------------------------------------------------------------------- :: record
+g |- { l_1 = val_1 ; .. ; l_n = val_n } : { l_1 : ty_1 ; .. ; l_n : ty_n }
+\end{verbatim}}
+Gives something like:
+\begin{lstlisting}[language=Coq]
+Inductive typing_arg :=
+[...]
+| typing_val_record : \forall (l : list (label*val*ty))
+  [...]
+  (map (fun pat_ : label * value * ty =>
+         let (p, _) := pat_ in let (l__, val__) := p in (l__, val__))
+       l)))
+  [...]
+\end{lstlisting}
+\end{frame}
+
 \begin{frame}{Nice properties of a language}
   \textbf{Properties of well formed type}\\
   Notations : $G \vdash ty$, $G \vdash$\\
@@ -221,6 +263,19 @@ def vote :
 
   Other solution: reorganize Albert's instructions (probably more efficient).
 \end{frame}
+
+%% \begin{frame}[fragile]{More complex compilations}
+%%   \begin{tabular}{p{4.8cm}|p{8cm}}
+%%     Albert code & Michelson code\\
+%%     \hline
+%%     $\{$x_1 = var_1 ; ... ; x_n = var_n$\} = $ & !UNPAIR; DUG var_1 ; ... ; DUG var_n!\\
+%% \hline
+%%   ?match var with?\newline$c_1$ $x_1$ ?->? $i_1$?|? \ldots\newline?|? $c_k$ $x_k$ ?->? $i_k$ ?end? &
+%%   !DIG var ; ! \newline
+%%   !IF_LEFT { DUG x_1 ;! $[|i_1|]$ !} { IF_LEFT !\ldots! }!\\
+%% \hline
+%%   \end{tabular}
+%% \end{frame}
 
 \section{Conclusion}
 
